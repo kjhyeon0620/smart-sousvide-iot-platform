@@ -3,6 +3,7 @@ package com.iot.IoT.ingestion.consumer;
 import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
 import com.iot.IoT.ingestion.exception.InvalidMqttPayloadException;
 import com.iot.IoT.ingestion.parser.MqttPayloadParser;
+import com.iot.IoT.ingestion.service.DeviceIngestionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.integration.annotation.ServiceActivator;
@@ -18,9 +19,14 @@ public class MqttConsumer {
     private static final Logger log = LoggerFactory.getLogger(MqttConsumer.class);
 
     private final MqttPayloadParser mqttPayloadParser;
+    private final DeviceIngestionService deviceIngestionService;
 
-    public MqttConsumer(MqttPayloadParser mqttPayloadParser) {
+    public MqttConsumer(
+            MqttPayloadParser mqttPayloadParser,
+            DeviceIngestionService deviceIngestionService
+    ) {
         this.mqttPayloadParser = mqttPayloadParser;
+        this.deviceIngestionService = deviceIngestionService;
     }
 
     @ServiceActivator(inputChannel = "mqttInputChannel")
@@ -36,6 +42,7 @@ public class MqttConsumer {
                     statusMessage.temp(),
                     statusMessage.targetTemp(),
                     statusMessage.state());
+            deviceIngestionService.ingest(statusMessage);
         } catch (InvalidMqttPayloadException ex) {
             log.warn("[MQTT] Invalid payload. topic={}, payload={}, reason={}",
                     topic,
