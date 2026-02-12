@@ -1,6 +1,7 @@
 package com.iot.IoT.ingestion.parser;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
 import com.iot.IoT.ingestion.exception.InvalidMqttPayloadException;
@@ -18,7 +19,8 @@ public class MqttPayloadParser {
     private final Validator validator;
 
     public MqttPayloadParser(ObjectMapper objectMapper, Validator validator) {
-        this.objectMapper = objectMapper;
+        this.objectMapper = objectMapper.copy()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
         this.validator = validator;
     }
 

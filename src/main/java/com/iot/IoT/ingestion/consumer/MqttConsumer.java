@@ -30,8 +30,9 @@ public class MqttConsumer {
 
         try {
             DeviceStatusMessage statusMessage = mqttPayloadParser.parseDeviceStatus(rawPayload);
-            log.info("[MQTT] Parsed device status. topic={}, temp={}, targetTemp={}, state={}",
+            log.info("[MQTT] Parsed device status. topic={}, deviceId={}, temp={}, targetTemp={}, state={}",
                     topic,
+                    statusMessage.deviceId(),
                     statusMessage.temp(),
                     statusMessage.targetTemp(),
                     statusMessage.state());
