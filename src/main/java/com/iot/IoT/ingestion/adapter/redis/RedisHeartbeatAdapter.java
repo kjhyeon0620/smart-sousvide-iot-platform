@@ -13,6 +13,7 @@ public class RedisHeartbeatAdapter implements HeartbeatPort {
 
     private static final String KEY_PREFIX = "device:";
     private static final String KEY_SUFFIX = ":lastSeen";
+    private static final String TRACKED_DEVICES_KEY = "devices:active";
 
     private final StringRedisTemplate redisTemplate;
     private final Duration heartbeatTtl;
@@ -30,5 +31,6 @@ public class RedisHeartbeatAdapter implements HeartbeatPort {
         String key = KEY_PREFIX + deviceId + KEY_SUFFIX;
         String value = String.valueOf(lastSeenAt.toEpochMilli());
         redisTemplate.opsForValue().set(key, value, heartbeatTtl);
+        redisTemplate.opsForSet().add(TRACKED_DEVICES_KEY, deviceId);
     }
 }
