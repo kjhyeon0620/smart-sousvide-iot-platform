@@ -39,6 +39,8 @@ influxdb:
 
 ingestion:
   heartbeat-ttl-seconds: 120
+control:
+  deadband: 0.3
 
 logging:
   level:

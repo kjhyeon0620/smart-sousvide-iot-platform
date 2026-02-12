@@ -44,6 +44,13 @@
 4. 핵심 코드 (Key Code): 해결의 열쇠가 되는 핵심 로직 발췌
 5. 배운 점 (Lesson): 기술적 인사이트, 트레이드오프, 주의사항
 
+## Issue Completion Response Bundle
+- 이슈 종료 시 Codex 응답은 아래 4가지를 항상 한 번에 제공한다.
+1. 작업 결과 상세 보고 (What/How/Why/Risk/Test)
+2. 커밋 메시지 제안 (Conventional Commits)
+3. PR 본문 초안 (`.github/pull_request_template.md` 형식)
+4. 블로그용 팩트 리포트 (`Context/Problem/Solution/Key Code/Lesson`)
+
 ## Blog Fact Reporting Style
 - 역할은 '취재 기자' 관점으로, 과장 없이 팩트 중심으로 작성한다.
 - 단순 코드 나열이 아니라 Problem Solving 관점으로 맥락을 연결한다.
