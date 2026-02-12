@@ -1,0 +1,48 @@
+name: Feature Request
+description: 기능 개발 이슈 템플릿
+title: "[Feature] "
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+      description: 왜 필요한 기능인지, 어떤 문제를 해결하는지 작성하세요.
+      placeholder: 현재 상태와 문제점
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: 완료 조건(DoD)을 명확히 작성하세요.
+      placeholder: 예) MQTT payload를 DTO로 파싱 후 Influx/Redis 반영
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: 이번 이슈에서 포함/제외 범위를 작성하세요.
+      placeholder: include / exclude
+    validations:
+      required: true
+  - type: textarea
+    id: technical_notes
+    attributes:
+      label: Technical Notes
+      description: 아키텍처/의사결정/제약사항을 작성하세요.
+      placeholder: 성능, 안정성, 확장성 관점
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: Test Plan
+      description: 검증 방법을 작성하세요.
+      placeholder: 단위/통합/부하 테스트 계획
+    validations:
+      required: true
+  - type: input
+    id: due
+    attributes:
+      label: Target Date
+      placeholder: YYYY-MM-DD

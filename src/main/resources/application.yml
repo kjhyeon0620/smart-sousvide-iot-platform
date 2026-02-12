@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: smart-sousvide
+
+  # 1. Database Configuration (MySQL)
+  datasource:
+    url: "jdbc:mysql://localhost:3307/sousvide_meta?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+    username: root
+    password: rootpassword
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update # 개발 단계이므로 스키마 자동 생성 허용
+    properties:
+      hibernate:
+        format_sql: true # SQL 로그 예쁘게 보기
+        show_sql: true
+
+  # 2. Redis Configuration
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  # 3. MQTT Configuration (Spring Integration Custom)
+  mqtt:
+    broker-url: tcp://localhost:1883
+    client-id: spring-boot-backend
+    username: # 설정 안 함 (Anonymous)
+    password: # 설정 안 함
+    default-topic: "sousvide/+/status" # +는 와일드카드 (모든 기기)
+
+# 4. InfluxDB Configuration
+influxdb:
+  url: http://localhost:8086
+  token: my-super-secret-auth-token # 나중에 InfluxDB UI에서 생성해야 함 (일단 placeholder)
+  org: myorg
+  bucket: sousvide_bucket
+
+logging:
+  level:
+    root: INFO
+    org.springframework.integration: DEBUG # MQTT 메시지 흐름 디버깅용
