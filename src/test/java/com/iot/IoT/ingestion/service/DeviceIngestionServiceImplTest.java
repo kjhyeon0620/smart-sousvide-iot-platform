@@ -1,5 +1,6 @@
 package com.iot.IoT.ingestion.service;
 
+import com.iot.IoT.control.ControlDecisionEngine;
 import com.iot.IoT.ingestion.dto.DeviceState;
 import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
 import com.iot.IoT.ingestion.port.HeartbeatPort;
@@ -21,13 +22,15 @@ class DeviceIngestionServiceImplTest {
 
     private TemperatureTimeSeriesPort temperatureTimeSeriesPort;
     private HeartbeatPort heartbeatPort;
+    private ControlDecisionEngine controlDecisionEngine;
     private DeviceIngestionServiceImpl service;
 
     @BeforeEach
     void setUp() {
         temperatureTimeSeriesPort = Mockito.mock(TemperatureTimeSeriesPort.class);
         heartbeatPort = Mockito.mock(HeartbeatPort.class);
-        service = new DeviceIngestionServiceImpl(temperatureTimeSeriesPort, heartbeatPort);
+        controlDecisionEngine = Mockito.mock(ControlDecisionEngine.class);
+        service = new DeviceIngestionServiceImpl(temperatureTimeSeriesPort, heartbeatPort, controlDecisionEngine);
     }
 
     @Test

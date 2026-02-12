@@ -1,5 +1,7 @@
 package com.iot.IoT.ingestion.service;
 
+import com.iot.IoT.control.ControlAction;
+import com.iot.IoT.control.ControlDecisionEngine;
 import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
 import com.iot.IoT.ingestion.port.HeartbeatPort;
 import com.iot.IoT.ingestion.port.TemperatureTimeSeriesPort;
@@ -16,13 +18,16 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
 
     private final TemperatureTimeSeriesPort temperatureTimeSeriesPort;
     private final HeartbeatPort heartbeatPort;
+    private final ControlDecisionEngine controlDecisionEngine;
 
     public DeviceIngestionServiceImpl(
             TemperatureTimeSeriesPort temperatureTimeSeriesPort,
-            HeartbeatPort heartbeatPort
+            HeartbeatPort heartbeatPort,
+            ControlDecisionEngine controlDecisionEngine
     ) {
         this.temperatureTimeSeriesPort = temperatureTimeSeriesPort;
         this.heartbeatPort = heartbeatPort;
+        this.controlDecisionEngine = controlDecisionEngine;
     }
 
     @Override
@@ -45,5 +50,13 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
         } catch (Exception e) {
             log.error("[INGESTION] Redis heartbeat update failed. deviceId={}", message.deviceId(), e);
         }
+
+        ControlAction action = controlDecisionEngine.decide(message);
+        log.info("[CONTROL] Decision made. deviceId={}, temp={}, targetTemp={}, state={}, action={}",
+                message.deviceId(),
+                message.temp(),
+                message.targetTemp(),
+                message.state(),
+                action);
     }
 }
