@@ -29,19 +29,20 @@ class MqttPayloadParserTest {
     @Test
     @DisplayName("Valid JSON payload should map to DeviceStatusMessage")
     void parseDeviceStatus_success() {
-        String payload = "{\"temp\":65.5,\"state\":\"ON\",\"target_temp\":70.0}";
+        String payload = "{\"deviceId\":\"SV-001\",\"temp\":65.5,\"targetTemp\":70.0,\"state\":\"HEATING\"}";
 
         DeviceStatusMessage result = parser.parseDeviceStatus(payload);
 
+        assertEquals("SV-001", result.deviceId());
         assertEquals(new BigDecimal("65.5"), result.temp());
         assertEquals(new BigDecimal("70.0"), result.targetTemp());
-        assertEquals(DeviceState.ON, result.state());
+        assertEquals(DeviceState.HEATING, result.state());
     }
 
     @Test
-    @DisplayName("Missing field should fail validation")
+    @DisplayName("Missing required field should fail validation")
     void parseDeviceStatus_missingField() {
-        String payload = "{\"temp\":65.5,\"state\":\"ON\"}";
+        String payload = "{\"deviceId\":\"SV-001\",\"temp\":65.5,\"state\":\"HEATING\"}";
 
         assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
     }
@@ -49,7 +50,23 @@ class MqttPayloadParserTest {
     @Test
     @DisplayName("Unknown state should fail JSON parsing")
     void parseDeviceStatus_unknownEnum() {
-        String payload = "{\"temp\":65.5,\"state\":\"RUNNING\",\"target_temp\":70.0}";
+        String payload = "{\"deviceId\":\"SV-001\",\"temp\":65.5,\"targetTemp\":70.0,\"state\":\"RUNNING\"}";
+
+        assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
+    }
+
+    @Test
+    @DisplayName("Invalid number type should fail JSON parsing")
+    void parseDeviceStatus_invalidNumberType() {
+        String payload = "{\"deviceId\":\"SV-001\",\"temp\":\"hot\",\"targetTemp\":70.0,\"state\":\"HEATING\"}";
+
+        assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
+    }
+
+    @Test
+    @DisplayName("Unknown field should fail JSON parsing")
+    void parseDeviceStatus_unknownField() {
+        String payload = "{\"deviceId\":\"SV-001\",\"temp\":65.5,\"targetTemp\":70.0,\"state\":\"HEATING\",\"foo\":\"bar\"}";
 
         assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
     }
