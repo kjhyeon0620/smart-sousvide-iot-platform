@@ -1,0 +1,49 @@
+package com.iot.IoT.ingestion.service;
+
+import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
+import com.iot.IoT.ingestion.port.HeartbeatPort;
+import com.iot.IoT.ingestion.port.TemperatureTimeSeriesPort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+
+@Service
+public class DeviceIngestionServiceImpl implements DeviceIngestionService {
+
+    private static final Logger log = LoggerFactory.getLogger(DeviceIngestionServiceImpl.class);
+
+    private final TemperatureTimeSeriesPort temperatureTimeSeriesPort;
+    private final HeartbeatPort heartbeatPort;
+
+    public DeviceIngestionServiceImpl(
+            TemperatureTimeSeriesPort temperatureTimeSeriesPort,
+            HeartbeatPort heartbeatPort
+    ) {
+        this.temperatureTimeSeriesPort = temperatureTimeSeriesPort;
+        this.heartbeatPort = heartbeatPort;
+    }
+
+    @Override
+    public void ingest(DeviceStatusMessage message) {
+        Instant now = Instant.now();
+
+        try {
+            temperatureTimeSeriesPort.save(message, now);
+        } catch (Exception e) {
+            log.error("[INGESTION] Influx write failed. deviceId={}, temp={}, targetTemp={}, state={}",
+                    message.deviceId(),
+                    message.temp(),
+                    message.targetTemp(),
+                    message.state(),
+                    e);
+        }
+
+        try {
+            heartbeatPort.updateLastSeen(message.deviceId(), now);
+        } catch (Exception e) {
+            log.error("[INGESTION] Redis heartbeat update failed. deviceId={}", message.deviceId(), e);
+        }
+    }
+}

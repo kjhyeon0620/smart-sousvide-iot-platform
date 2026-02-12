@@ -37,6 +37,9 @@ influxdb:
   org: myorg
   bucket: sousvide_bucket
 
+ingestion:
+  heartbeat-ttl-seconds: 120
+
 logging:
   level:
     root: INFO
