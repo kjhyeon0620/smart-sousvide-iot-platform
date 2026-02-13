@@ -3,6 +3,7 @@ package com.iot.IoT.ingestion.service;
 import com.iot.IoT.control.ControlDecisionEngine;
 import com.iot.IoT.ingestion.dto.DeviceState;
 import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
+import com.iot.IoT.ingestion.metrics.IngestionMetricsCollector;
 import com.iot.IoT.ingestion.port.HeartbeatPort;
 import com.iot.IoT.ingestion.port.TemperatureTimeSeriesPort;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +24,7 @@ class DeviceIngestionServiceImplTest {
     private TemperatureTimeSeriesPort temperatureTimeSeriesPort;
     private HeartbeatPort heartbeatPort;
     private ControlDecisionEngine controlDecisionEngine;
+    private IngestionMetricsCollector ingestionMetricsCollector;
     private DeviceIngestionServiceImpl service;
 
     @BeforeEach
@@ -30,7 +32,13 @@ class DeviceIngestionServiceImplTest {
         temperatureTimeSeriesPort = Mockito.mock(TemperatureTimeSeriesPort.class);
         heartbeatPort = Mockito.mock(HeartbeatPort.class);
         controlDecisionEngine = Mockito.mock(ControlDecisionEngine.class);
-        service = new DeviceIngestionServiceImpl(temperatureTimeSeriesPort, heartbeatPort, controlDecisionEngine);
+        ingestionMetricsCollector = Mockito.mock(IngestionMetricsCollector.class);
+        service = new DeviceIngestionServiceImpl(
+                temperatureTimeSeriesPort,
+                heartbeatPort,
+                controlDecisionEngine,
+                ingestionMetricsCollector
+        );
     }
 
     @Test
@@ -42,6 +50,10 @@ class DeviceIngestionServiceImplTest {
 
         verify(temperatureTimeSeriesPort, times(1)).save(eq(message), any());
         verify(heartbeatPort, times(1)).updateLastSeen(eq("SV-001"), any());
+        verify(ingestionMetricsCollector, times(1)).recordInfluxSuccess();
+        verify(ingestionMetricsCollector, times(0)).recordInfluxFailure();
+        verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
+        verify(ingestionMetricsCollector, times(0)).recordRedisFailure();
     }
 
     @Test
@@ -54,6 +66,10 @@ class DeviceIngestionServiceImplTest {
 
         verify(temperatureTimeSeriesPort, times(1)).save(eq(message), any());
         verify(heartbeatPort, times(1)).updateLastSeen(eq("SV-001"), any());
+        verify(ingestionMetricsCollector, times(0)).recordInfluxSuccess();
+        verify(ingestionMetricsCollector, times(1)).recordInfluxFailure();
+        verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
+        verify(ingestionMetricsCollector, times(0)).recordRedisFailure();
     }
 
     @Test
@@ -66,6 +82,10 @@ class DeviceIngestionServiceImplTest {
 
         verify(temperatureTimeSeriesPort, times(1)).save(eq(message), any());
         verify(heartbeatPort, times(1)).updateLastSeen(eq("SV-001"), any());
+        verify(ingestionMetricsCollector, times(1)).recordInfluxSuccess();
+        verify(ingestionMetricsCollector, times(0)).recordInfluxFailure();
+        verify(ingestionMetricsCollector, times(0)).recordRedisSuccess();
+        verify(ingestionMetricsCollector, times(1)).recordRedisFailure();
     }
 
     private DeviceStatusMessage sampleMessage() {

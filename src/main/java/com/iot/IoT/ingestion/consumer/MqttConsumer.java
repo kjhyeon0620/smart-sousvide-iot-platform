@@ -2,6 +2,7 @@ package com.iot.IoT.ingestion.consumer;
 
 import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
 import com.iot.IoT.ingestion.exception.InvalidMqttPayloadException;
+import com.iot.IoT.ingestion.metrics.IngestionMetricsCollector;
 import com.iot.IoT.ingestion.parser.MqttPayloadParser;
 import com.iot.IoT.ingestion.service.DeviceIngestionService;
 import org.slf4j.Logger;
@@ -20,22 +21,27 @@ public class MqttConsumer {
 
     private final MqttPayloadParser mqttPayloadParser;
     private final DeviceIngestionService deviceIngestionService;
+    private final IngestionMetricsCollector ingestionMetricsCollector;
 
     public MqttConsumer(
             MqttPayloadParser mqttPayloadParser,
-            DeviceIngestionService deviceIngestionService
+            DeviceIngestionService deviceIngestionService,
+            IngestionMetricsCollector ingestionMetricsCollector
     ) {
         this.mqttPayloadParser = mqttPayloadParser;
         this.deviceIngestionService = deviceIngestionService;
+        this.ingestionMetricsCollector = ingestionMetricsCollector;
     }
 
     @ServiceActivator(inputChannel = "mqttInputChannel")
     public void handle(Message<?> message) {
         String topic = (String) message.getHeaders().get(MqttHeaders.RECEIVED_TOPIC);
         String rawPayload = payloadAsString(message.getPayload());
+        ingestionMetricsCollector.recordMqttReceived();
 
         try {
             DeviceStatusMessage statusMessage = mqttPayloadParser.parseDeviceStatus(rawPayload);
+            ingestionMetricsCollector.recordParseSuccess();
             log.info("[MQTT] Parsed device status. topic={}, deviceId={}, temp={}, targetTemp={}, state={}",
                     topic,
                     statusMessage.deviceId(),
@@ -44,6 +50,7 @@ public class MqttConsumer {
                     statusMessage.state());
             deviceIngestionService.ingest(statusMessage);
         } catch (InvalidMqttPayloadException ex) {
+            ingestionMetricsCollector.recordParseFailure();
             log.warn("[MQTT] Invalid payload. topic={}, payload={}, reason={}",
                     topic,
                     rawPayload,
