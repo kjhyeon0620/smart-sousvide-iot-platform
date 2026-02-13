@@ -27,5 +27,5 @@ jobs:
       - name: Unit Tests (Ingestion/Control)
         run: |
           ./gradlew test \
-            --tests "com.iot.IoT.ingestion..*" \
-            --tests "com.iot.IoT.control..*"
+            --tests "com.iot.IoT.ingestion.*" \
+            --tests "com.iot.IoT.control.*"
