@@ -4,31 +4,24 @@ title: "[TechDebt] "
 labels: ["type:techdebt"]
 body:
   - type: textarea
-    id: debt
+    id: content
     attributes:
-      label: Debt Description
-      description: 어떤 기술 부채인지 설명하세요.
-    validations:
-      required: true
-  - type: textarea
-    id: impact
-    attributes:
-      label: Impact
-      description: 현재/미래 리스크를 작성하세요.
-      placeholder: 장애 가능성, 성능 저하, 유지보수 비용 증가
-    validations:
-      required: true
-  - type: textarea
-    id: proposal
-    attributes:
-      label: Proposed Solution
-      description: 개선 방안 및 대안 비교
-    validations:
-      required: true
-  - type: textarea
-    id: acceptance
-    attributes:
-      label: Acceptance Criteria
-      description: 완료 기준
+      label: Tech Debt Details
+      description: 아래 템플릿 전체를 한 번에 복붙해서 작성하세요.
+      value: |
+        ## Debt Description
+        - 어떤 기술 부채인지
+
+        ## Impact
+        - 현재 리스크
+        - 미래 리스크
+
+        ## Proposed Solution
+        - 개선 방안
+        - 대안/트레이드오프
+
+        ## Acceptance Criteria
+        - [ ] 완료 조건 1
+        - [ ] 완료 조건 2
     validations:
       required: true

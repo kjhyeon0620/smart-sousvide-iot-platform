@@ -4,52 +4,32 @@ title: "[Bug] "
 labels: ["type:bug"]
 body:
   - type: textarea
-    id: summary
+    id: content
     attributes:
-      label: Summary
-      description: 버그를 한 줄로 요약하세요.
-    validations:
-      required: true
-  - type: textarea
-    id: steps
-    attributes:
-      label: Steps To Reproduce
-      description: 재현 절차를 번호로 작성하세요.
-      placeholder: |
+      label: Bug Details
+      description: 아래 템플릿 전체를 한 번에 복붙해서 작성하세요.
+      value: |
+        ## Summary
+        - 버그 요약
+
+        ## Steps To Reproduce
         1. ...
         2. ...
         3. ...
+
+        ## Expected Result
+        - 기대 결과
+
+        ## Actual Result
+        - 실제 결과
+
+        ## Logs / Evidence
+        - 에러 로그, 스크린샷, 요청/응답
+
+        ## Severity
+        - critical / major / minor
+
+        ## Environment
+        - local docker / branch / commit
     validations:
       required: true
-  - type: textarea
-    id: expected
-    attributes:
-      label: Expected Result
-    validations:
-      required: true
-  - type: textarea
-    id: actual
-    attributes:
-      label: Actual Result
-    validations:
-      required: true
-  - type: textarea
-    id: logs
-    attributes:
-      label: Logs / Evidence
-      description: 에러 로그, 스크린샷, 요청/응답 예시 첨부
-  - type: dropdown
-    id: severity
-    attributes:
-      label: Severity
-      options:
-        - critical
-        - major
-        - minor
-    validations:
-      required: true
-  - type: input
-    id: environment
-    attributes:
-      label: Environment
-      placeholder: local docker / branch / commit
