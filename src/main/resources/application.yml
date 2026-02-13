@@ -39,6 +39,9 @@ influxdb:
 
 ingestion:
   heartbeat-ttl-seconds: 120
+  metrics:
+    enabled: true
+  metrics-log-interval-ms: 1000
 control:
   deadband: 0.3
 watchdog:
