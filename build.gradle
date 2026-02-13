@@ -60,3 +60,10 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+tasks.register('mqttLoadTest', JavaExec) {
+	group = 'verification'
+	description = 'Runs MQTT load simulator for high-traffic ingestion testing'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'com.iot.IoT.loadtest.MqttLoadSimulator'
+}
