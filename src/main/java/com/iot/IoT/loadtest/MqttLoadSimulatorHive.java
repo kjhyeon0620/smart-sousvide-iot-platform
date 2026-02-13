@@ -1,39 +1,35 @@
 package com.iot.IoT.loadtest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
-import org.eclipse.paho.client.mqttv3.MqttAsyncClient;
-import org.eclipse.paho.client.mqttv3.MqttCallback;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
+import com.hivemq.client.mqtt.MqttClient;
+import com.hivemq.client.mqtt.datatypes.MqttQos;
+import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 
-public class MqttLoadSimulator {
+public class MqttLoadSimulatorHive {
 
     public static void main(String[] args) throws Exception {
         SimulatorConfig config = SimulatorConfig.fromArgs(args);
+        URI broker = URI.create(config.brokerUrl().replace("tcp://", "mqtt://"));
 
-        System.out.println("[SIM] starting with config=" + config);
+        System.out.println("[SIM-HIVE] starting with config=" + config);
 
         DevicePayloadFactory payloadFactory = new DevicePayloadFactory(new ObjectMapper());
-        MqttAsyncClient[] clients = new MqttAsyncClient[config.connections()];
+        Mqtt5AsyncClient[] clients = new Mqtt5AsyncClient[config.connections()];
         double[] currentTemps = new double[config.connections()];
+
         LongAdder connected = new LongAdder();
         LongAdder connectFailed = new LongAdder();
-        Queue<Throwable> connectErrors = new ConcurrentLinkedQueue<>();
 
         ExecutorService connectPool = Executors.newFixedThreadPool(config.connectParallelism());
         Future<?>[] connectFutures = new Future[config.connections()];
@@ -46,26 +42,27 @@ public class MqttLoadSimulator {
                 currentTemps[index] = config.baseTemp() + (globalIndex % 10) * 0.05;
 
                 try {
-                    MqttAsyncClient client = new MqttAsyncClient(config.brokerUrl(), clientId, new MemoryPersistence());
-                    client.setCallback(new NoopCallback());
+                    Mqtt5AsyncClient client = MqttClient.builder()
+                            .useMqttVersion5()
+                            .serverHost(broker.getHost())
+                            .serverPort(broker.getPort() == -1 ? 1883 : broker.getPort())
+                            .identifier(clientId)
+                            .buildAsync();
 
-                    MqttConnectOptions options = new MqttConnectOptions();
-                    options.setAutomaticReconnect(false);
-                    options.setCleanSession(true);
-                    options.setConnectionTimeout(10);
-                    options.setKeepAliveInterval(300);
-                    options.setMaxInflight(1000);
-                    client.connect(options).waitForCompletion(15_000);
-
+                    client.connectWith()
+                            .cleanStart(true)
+                            .send()
+                            .toCompletableFuture()
+                            .get(15, TimeUnit.SECONDS);
                     clients[index] = client;
+
                     connected.increment();
                     long now = connected.sum();
                     if (now % 200 == 0 || now == config.connections()) {
-                        System.out.printf("[SIM] connected %d/%d clients%n", now, config.connections());
+                        System.out.printf("[SIM-HIVE] connected %d/%d clients%n", now, config.connections());
                     }
                 } catch (Exception e) {
                     connectFailed.increment();
-                    connectErrors.add(e);
                 }
             });
         }
@@ -76,35 +73,44 @@ public class MqttLoadSimulator {
         connectPool.shutdown();
 
         if (connectFailed.sum() > 0) {
-            throw new IllegalStateException("Failed to connect clients: " + connectFailed.sum(), connectErrors.peek());
+            throw new IllegalStateException("Failed to connect clients: " + connectFailed.sum());
         }
 
         LongAdder published = new LongAdder();
         LongAdder failed = new LongAdder();
+        MqttQos qos = toQos(config.qos());
 
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         Instant startedAt = Instant.now();
 
         Runnable publishTask = () -> {
             for (int i = 0; i < clients.length; i++) {
-                MqttAsyncClient client = clients[i];
-                if (client == null || !client.isConnected()) {
+                Mqtt5AsyncClient client = clients[i];
+                if (client == null) {
                     failed.increment();
                     continue;
                 }
+
                 String deviceId = "SV-" + String.format("%05d", config.startIndex() + i);
                 String topic = String.format(config.topicTemplate(), deviceId);
-
                 currentTemps[i] = payloadFactory.nextTemp(currentTemps[i], config.targetTemp());
                 String payload = payloadFactory.create(deviceId, currentTemps[i], config.targetTemp());
+                byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
 
                 for (int j = 0; j < config.messagesPerSecond(); j++) {
                     try {
-                        MqttMessage message = new MqttMessage(payload.getBytes(StandardCharsets.UTF_8));
-                        message.setQos(config.qos());
-                        client.publish(topic, message);
+                        client.publishWith()
+                                .topic(topic)
+                                .qos(qos)
+                                .payload(bytes)
+                                .send()
+                                .whenComplete((ack, ex) -> {
+                                    if (ex != null) {
+                                        failed.increment();
+                                    }
+                                });
                         published.increment();
-                    } catch (MqttException e) {
+                    } catch (Exception e) {
                         failed.increment();
                     }
                 }
@@ -115,22 +121,14 @@ public class MqttLoadSimulator {
         Thread.sleep(config.durationSeconds() * 1000L);
         scheduler.shutdownNow();
 
-        for (MqttAsyncClient client : clients) {
+        for (Mqtt5AsyncClient client : clients) {
             if (client == null) {
                 continue;
             }
             try {
-                if (client.isConnected()) {
-                    client.disconnectForcibly(0, 0);
-                }
+                client.disconnectWith().send().toCompletableFuture().get(2, TimeUnit.SECONDS);
             } catch (Exception ignored) {
                 // best-effort shutdown
-            } finally {
-                try {
-                    client.close();
-                } catch (Exception ignored) {
-                    // best-effort close
-                }
             }
         }
 
@@ -142,30 +140,20 @@ public class MqttLoadSimulator {
         double tpsActive = sent / activeSeconds;
         double tpsWall = sent / wallSeconds;
 
-        System.out.println("[SIM] finished");
-        System.out.println("[SIM] durationSec=" + activeSeconds);
-        System.out.println("[SIM] wallDurationSec=" + String.format("%.3f", wallSeconds));
-        System.out.println("[SIM] published=" + sent);
-        System.out.println("[SIM] failed=" + error);
-        System.out.println("[SIM] throughput(msg/sec)=" + String.format("%.2f", tpsActive));
-        System.out.println("[SIM] throughputWall(msg/sec)=" + String.format("%.2f", tpsWall));
+        System.out.println("[SIM-HIVE] finished");
+        System.out.println("[SIM-HIVE] durationSec=" + activeSeconds);
+        System.out.println("[SIM-HIVE] wallDurationSec=" + String.format("%.3f", wallSeconds));
+        System.out.println("[SIM-HIVE] published=" + sent);
+        System.out.println("[SIM-HIVE] failed=" + error);
+        System.out.println("[SIM-HIVE] throughput(msg/sec)=" + String.format("%.2f", tpsActive));
+        System.out.println("[SIM-HIVE] throughputWall(msg/sec)=" + String.format("%.2f", tpsWall));
     }
 
-    private static class NoopCallback implements MqttCallback {
-
-        @Override
-        public void connectionLost(Throwable cause) {
-            // ignore in simulator
-        }
-
-        @Override
-        public void messageArrived(String topic, MqttMessage message) {
-            // publish-only simulator
-        }
-
-        @Override
-        public void deliveryComplete(IMqttDeliveryToken token) {
-            // no-op
-        }
+    private static MqttQos toQos(int qos) {
+        return switch (qos) {
+            case 0 -> MqttQos.AT_MOST_ONCE;
+            case 2 -> MqttQos.EXACTLY_ONCE;
+            default -> MqttQos.AT_LEAST_ONCE;
+        };
     }
 }

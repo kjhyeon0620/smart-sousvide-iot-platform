@@ -21,9 +21,9 @@ for LOG in "$RUN_DIR"/part-*.log; do
   [[ -f "$LOG" ]] || continue
   PARTS=$(( PARTS + 1 ))
 
-  PUB_LINE="$(grep -E "\[SIM\] published=" "$LOG" | tail -n1 || true)"
-  FAIL_LINE="$(grep -E "\[SIM\] failed=" "$LOG" | tail -n1 || true)"
-  TPS_LINE="$(grep -E "\[SIM\] throughput\(msg/sec\)=" "$LOG" | tail -n1 || true)"
+  PUB_LINE="$(grep -E "\[(SIM|SIM-HIVE)\] published=" "$LOG" | tail -n1 || true)"
+  FAIL_LINE="$(grep -E "\[(SIM|SIM-HIVE)\] failed=" "$LOG" | tail -n1 || true)"
+  TPS_LINE="$(grep -E "\[(SIM|SIM-HIVE)\] throughput\(msg/sec\)=" "$LOG" | tail -n1 || true)"
 
   PUB="${PUB_LINE##*=}"
   FLD="${FAIL_LINE##*=}"
