@@ -41,6 +41,9 @@ ingestion:
   heartbeat-ttl-seconds: 120
 control:
   deadband: 0.3
+watchdog:
+  scan-interval-ms: 5000
+  offline-notify-cooldown-seconds: 60
 
 logging:
   level:
