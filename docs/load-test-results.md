@@ -109,3 +109,26 @@
 - Adaptive fallback improved orchestration, observability, and reproducibility of failure handling.
 - Root bottleneck remains unresolved: per-client native thread footprint of current MQTT client model.
 - On current host/runtime, `2500` is still not stably repeatable even with distributed and adaptive retry strategy.
+
+## Round 4 Root-Cause Verification (Paho vs HiveMQ)
+
+### Objective
+- Verify whether the scaling limit is broker/infrastructure or MQTT client model.
+
+### 1500 Connections Cross-Check
+| Model | Command | Result | Evidence |
+|---|---|---|---|
+| Paho | `SIM_TASK=mqttLoadTest MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1` | Failed | parts exited with `code=143`, Paho logs include `Timed out as no activity` |
+| HiveMQ | `SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1` | Success | `published_total=46500`, `failed_total=0`, `throughput_total=1550.00` |
+
+### HiveMQ Scale-Up Validation
+| Connections | Partitions | Parallelism | Published | Failed | Throughput (msg/s) | Result | Run ID |
+|---:|---:|---:|---:|---:|---:|---|---|
+| 2000 | 3 | 120 | 61,334 | 0 | 2,044.46 | Success | `20260213-185957` |
+| 2500 | 3 | 120 | 77,500 | 0 | 2,583.34 | Success | `20260213-190212` |
+| 3000 | 4 | 120 | 93,000 | 0 | 3,100.00 | Success | `20260213-190513` |
+
+### Round 4 Conclusion
+- The immediate bottleneck is the Paho client model behavior under high concurrency on this host/runtime.
+- Broker/infrastructure is not the primary blocker because HiveMQ path scaled to 3000 with zero failures.
+- Default high-traffic baseline should use HiveMQ simulator path; Paho path remains as comparison and technical debt item.
