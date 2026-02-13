@@ -45,7 +45,9 @@ public record SimulatorConfig(
             if (idx < 0) {
                 continue;
             }
-            map.put(arg.substring(2, idx), arg.substring(idx + 1));
+            String key = arg.substring(2, idx).trim();
+            String value = arg.substring(idx + 1).trim();
+            map.put(key, value);
         }
         return map;
     }

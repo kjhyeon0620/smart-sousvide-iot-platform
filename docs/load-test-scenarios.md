@@ -1,64 +1,61 @@
 # MQTT Load Test Scenarios (Local)
 
-## Run Command
-Use Gradle JavaExec task:
-
+## Pre-check
 ```bash
-./gradlew mqttLoadTest --args="--connections=1000 --messages-per-second=1 --duration-seconds=120"
+docker compose ps
 ```
 
-## Parameters
-- `--broker-url=tcp://localhost:1883`
-- `--topic-template=sousvide/%s/status`
-- `--connections=100`
-- `--start-index=0`
-- `--connect-parallelism=100`
-- `--messages-per-second=1`
-- `--duration-seconds=60`
-- `--qos=1`
-- `--client-prefix=sim`
-- `--base-temp=60.0`
-- `--target-temp=65.0`
+Run with at least Mosquitto up:
+- `smart-sousvide-mqtt` on `localhost:1883`
 
-## Step Load Plan
-1. `1k x 1 msg/s x 120s`
-2. `3k x 1 msg/s x 120s`
-3. `5k x 1 msg/s x 120s`
-4. `10k x 1 msg/s x 120s`
+## Current Execution Model
+- Use `scripts/loadtest/run-distributed.sh`.
+- Script does one-time runtime preparation, then runs each partition via direct `java -cp ...` execution.
+- This avoids per-partition Gradle startup overhead.
 
-## Metrics To Record
-- simulator throughput (msg/s)
-- broker CPU / memory
-- backend ingest log rate and error count
-- Redis command latency (heartbeat)
-- Influx write errors
-
-## Distributed Run (Recommended for 2500+)
+## Common Arguments
 ```bash
-./scripts/loadtest/run-distributed.sh 2500 2 120 1 60 1
+./scripts/loadtest/run-distributed.sh <totalConnections> <partitions> <connectParallelism> <mps> <durationSec> <qos>
 ```
 
-Arguments:
-- `2500`: total connections
-- `2`: number of simulator processes
-- `120`: connect parallelism per process
-- `1`: messages per second per device
-- `60`: duration seconds
-- `1`: qos
-
-## Adaptive Fallback (Round3)
-`run-distributed.sh` retries automatically when thread-limit errors are detected.
-
-Environment variables:
+## Key Environment Variables
+- `SIM_TASK`
+  - `mqttLoadTest`: Paho simulator
+  - `mqttLoadTestHive`: HiveMQ simulator
 - `MAX_ATTEMPTS` (default: 4)
 - `MIN_PARALLELISM` (default: 40)
 - `MAX_PARTITIONS` (default: 6)
+- `PART_TIMEOUT_SECONDS` (default: `duration + 120`)
 
-Fallback order:
-1. Increase partition count by +1 (up to `MAX_PARTITIONS`)
-2. Reduce connect parallelism by half (down to `MIN_PARALLELISM`)
-
-Example:
+## Recommended Validation Sequence
+1. Paho smoke
 ```bash
-MAX_ATTEMPTS=5 MIN_PARALLELISM=30 MAX_PARTITIONS=8 ./scripts/loadtest/run-distributed.sh 2500 2 120 1 60 1
+SIM_TASK=mqttLoadTest MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=180 ./scripts/loadtest/run-distributed.sh 200 1 40 1 10 1
 ```
+
+2. Model cross-check at same load
+```bash
+SIM_TASK=mqttLoadTest MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1
+SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1
+```
+
+3. HiveMQ scale-up baseline
+```bash
+SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=360 ./scripts/loadtest/run-distributed.sh 2000 3 120 1 30 1
+SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=420 ./scripts/loadtest/run-distributed.sh 2500 3 120 1 30 1
+SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=480 ./scripts/loadtest/run-distributed.sh 3000 4 120 1 30 1
+```
+
+## Metrics To Record
+- `published_total`
+- `failed_total`
+- `throughput_total(msg/sec)`
+- per-part logs: `docs/loadtest-runs/<run-id>/attempt-<n>/part-*.log`
+- failure signatures:
+  - `unable to create native thread`
+  - `pthread_create failed (EAGAIN)`
+  - `Timed out as no activity` (Paho keepalive path)
+
+## Interpretation Rule
+- If Paho fails and HiveMQ succeeds under same parameters, classify as client-model bottleneck.
+- Use HiveMQ path as default baseline for further backend capacity validation.
