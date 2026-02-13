@@ -7,13 +7,16 @@ import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
@@ -26,27 +29,51 @@ public class MqttLoadSimulator {
         System.out.println("[SIM] starting with config=" + config);
 
         DevicePayloadFactory payloadFactory = new DevicePayloadFactory(new ObjectMapper());
-        List<MqttAsyncClient> clients = new ArrayList<>(config.connections());
+        MqttAsyncClient[] clients = new MqttAsyncClient[config.connections()];
         double[] currentTemps = new double[config.connections()];
+        LongAdder connected = new LongAdder();
+        LongAdder connectFailed = new LongAdder();
+        Queue<Throwable> connectErrors = new ConcurrentLinkedQueue<>();
+
+        ExecutorService connectPool = Executors.newFixedThreadPool(config.connectParallelism());
+        Future<?>[] connectFutures = new Future[config.connections()];
 
         for (int i = 0; i < config.connections(); i++) {
-            String clientId = config.clientPrefix() + "-" + i;
-            String deviceId = "SV-" + String.format("%05d", i);
-            currentTemps[i] = config.baseTemp() + (i % 10) * 0.05;
+            int index = i;
+            connectFutures[i] = connectPool.submit(() -> {
+                int globalIndex = config.startIndex() + index;
+                String clientId = config.clientPrefix() + "-" + globalIndex;
+                currentTemps[index] = config.baseTemp() + (globalIndex % 10) * 0.05;
 
-            MqttAsyncClient client = new MqttAsyncClient(config.brokerUrl(), clientId);
-            client.setCallback(new NoopCallback());
+                try {
+                    MqttAsyncClient client = new MqttAsyncClient(config.brokerUrl(), clientId, new MemoryPersistence());
+                    client.setCallback(new NoopCallback());
 
-            MqttConnectOptions options = new MqttConnectOptions();
-            options.setAutomaticReconnect(true);
-            options.setCleanSession(true);
-            client.connect(options).waitForCompletion();
+                    MqttConnectOptions options = new MqttConnectOptions();
+                    options.setAutomaticReconnect(true);
+                    options.setCleanSession(true);
+                    client.connect(options).waitForCompletion();
 
-            clients.add(client);
+                    clients[index] = client;
+                    connected.increment();
+                    long now = connected.sum();
+                    if (now % 200 == 0 || now == config.connections()) {
+                        System.out.printf("[SIM] connected %d/%d clients%n", now, config.connections());
+                    }
+                } catch (Exception e) {
+                    connectFailed.increment();
+                    connectErrors.add(e);
+                }
+            });
+        }
 
-            if ((i + 1) % 500 == 0 || i == config.connections() - 1) {
-                System.out.printf("[SIM] connected %d/%d clients%n", i + 1, config.connections());
-            }
+        for (Future<?> future : connectFutures) {
+            future.get();
+        }
+        connectPool.shutdown();
+
+        if (connectFailed.sum() > 0) {
+            throw new IllegalStateException("Failed to connect clients: " + connectFailed.sum(), connectErrors.peek());
         }
 
         LongAdder published = new LongAdder();
@@ -56,9 +83,13 @@ public class MqttLoadSimulator {
         Instant startedAt = Instant.now();
 
         Runnable publishTask = () -> {
-            for (int i = 0; i < clients.size(); i++) {
-                MqttAsyncClient client = clients.get(i);
-                String deviceId = "SV-" + String.format("%05d", i);
+            for (int i = 0; i < clients.length; i++) {
+                MqttAsyncClient client = clients[i];
+                if (client == null || !client.isConnected()) {
+                    failed.increment();
+                    continue;
+                }
+                String deviceId = "SV-" + String.format("%05d", config.startIndex() + i);
                 String topic = String.format(config.topicTemplate(), deviceId);
 
                 currentTemps[i] = payloadFactory.nextTemp(currentTemps[i], config.targetTemp());
@@ -82,6 +113,9 @@ public class MqttLoadSimulator {
         scheduler.shutdownNow();
 
         for (MqttAsyncClient client : clients) {
+            if (client == null) {
+                continue;
+            }
             try {
                 if (client.isConnected()) {
                     client.disconnect().waitForCompletion();
