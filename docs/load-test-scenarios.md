@@ -11,6 +11,8 @@ Use Gradle JavaExec task:
 - `--broker-url=tcp://localhost:1883`
 - `--topic-template=sousvide/%s/status`
 - `--connections=100`
+- `--start-index=0`
+- `--connect-parallelism=100`
 - `--messages-per-second=1`
 - `--duration-seconds=60`
 - `--qos=1`
@@ -30,3 +32,16 @@ Use Gradle JavaExec task:
 - backend ingest log rate and error count
 - Redis command latency (heartbeat)
 - Influx write errors
+
+## Distributed Run (Recommended for 2500+)
+```bash
+./scripts/loadtest/run-distributed.sh 2500 2 120 1 60 1
+```
+
+Arguments:
+- `2500`: total connections
+- `2`: number of simulator processes
+- `120`: connect parallelism per process
+- `1`: messages per second per device
+- `60`: duration seconds
+- `1`: qos
