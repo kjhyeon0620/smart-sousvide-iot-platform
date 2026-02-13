@@ -24,8 +24,10 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
-      - name: Unit Tests (Ingestion/Control)
+      - name: Unit Tests (Ingestion/Control/Watchdog/LoadTest)
         run: |
           ./gradlew test \
             --tests "com.iot.IoT.ingestion.*" \
-            --tests "com.iot.IoT.control.*"
+            --tests "com.iot.IoT.control.*" \
+            --tests "com.iot.IoT.watchdog.*" \
+            --tests "com.iot.IoT.loadtest.*"
