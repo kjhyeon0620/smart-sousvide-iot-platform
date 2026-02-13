@@ -80,3 +80,32 @@
 ### Round 2 Conclusion
 - Distributed mode improved reproducibility and removed local persistence directory side-effects.
 - However, on current host and runtime, 2500 total concurrent clients still exceeds native thread limits.
+
+## Round 3 Execution (Adaptive Fallback)
+
+### Script Enhancements
+- `run-distributed.sh` now retries automatically on thread-limit failures.
+- Fallback strategy:
+  1. increase partition count first
+  2. then reduce connect parallelism
+
+### Run A
+- command: `MAX_ATTEMPTS=4 MIN_PARALLELISM=30 MAX_PARTITIONS=8 ./scripts/loadtest/run-distributed.sh 2500 2 120 1 60 1`
+- logs: `docs/loadtest-runs/20260213-165623`
+- attempt-1 outcome:
+  - part-0: success (`published=76250`, `failed=0`, `throughput=1123.16`)
+  - part-1: failed with thread ceiling (`EAGAIN`, `unable to create native thread`)
+- fallback moved to attempt-2 (`parallelism 120 -> 60`), but run remained unstable.
+
+### Run B
+- command: `MAX_ATTEMPTS=4 MIN_PARALLELISM=30 MAX_PARTITIONS=8 ./scripts/loadtest/run-distributed.sh 2500 3 80 1 60 1`
+- logs: `docs/loadtest-runs/20260213-170440`
+- attempt-1 outcome:
+  - part-1: success (`published=50813`, `failed=0`, `throughput=753.50`)
+  - part-0 / part-2: failed with thread ceiling (`EAGAIN`, `unable to create native thread`)
+- run was terminated due prolonged unstable state.
+
+### Round 3 Conclusion
+- Adaptive fallback improved orchestration, observability, and reproducibility of failure handling.
+- Root bottleneck remains unresolved: per-client native thread footprint of current MQTT client model.
+- On current host/runtime, `2500` is still not stably repeatable even with distributed and adaptive retry strategy.
