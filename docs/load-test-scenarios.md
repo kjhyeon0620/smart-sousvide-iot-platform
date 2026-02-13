@@ -45,3 +45,20 @@ Arguments:
 - `1`: messages per second per device
 - `60`: duration seconds
 - `1`: qos
+
+## Adaptive Fallback (Round3)
+`run-distributed.sh` retries automatically when thread-limit errors are detected.
+
+Environment variables:
+- `MAX_ATTEMPTS` (default: 4)
+- `MIN_PARALLELISM` (default: 40)
+- `MAX_PARTITIONS` (default: 6)
+
+Fallback order:
+1. Increase partition count by +1 (up to `MAX_PARTITIONS`)
+2. Reduce connect parallelism by half (down to `MIN_PARALLELISM`)
+
+Example:
+```bash
+MAX_ATTEMPTS=5 MIN_PARALLELISM=30 MAX_PARTITIONS=8 ./scripts/loadtest/run-distributed.sh 2500 2 120 1 60 1
+```
