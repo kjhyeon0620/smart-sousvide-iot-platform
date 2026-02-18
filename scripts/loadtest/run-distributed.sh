@@ -11,6 +11,7 @@ MPS="${4:-1}"
 DURATION="${5:-60}"
 QOS="${6:-1}"
 SIM_TASK="${SIM_TASK:-mqttLoadTest}"
+RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 GRADLE_USER_HOME_DIR="${GRADLE_USER_HOME_DIR:-$ROOT_DIR/.gradle-local}"
 
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-4}"
@@ -19,6 +20,7 @@ MAX_PARTITIONS="${MAX_PARTITIONS:-6}"
 PART_TIMEOUT_SECONDS="${PART_TIMEOUT_SECONDS:-$((DURATION + 120))}"
 GRADLE_DAEMON_FLAG="${GRADLE_DAEMON_FLAG:---no-daemon}"
 JVM_OPTS="${JVM_OPTS:-}"
+REQUIRE_BUSINESS_SUMMARY="${REQUIRE_BUSINESS_SUMMARY:-0}"
 
 if (( PARTITIONS < 1 )); then
   echo "PARTITIONS must be >= 1" >&2
@@ -143,13 +145,46 @@ run_once() {
     rc=0
   done
 
-  "$ROOT_DIR/scripts/loadtest/summarize-results.sh" "$run_dir" || true
+  if ! "$ROOT_DIR/scripts/loadtest/summarize-results.sh" "$run_dir"; then
+    echo "[DIST] connection summary generation failed (${run_dir})" >&2
+    fail=1
+  fi
+  local summary_file="$run_dir/business-summary.json"
+  if [[ -f "$run_dir/backend.log" ]]; then
+    if ! "$ROOT_DIR/scripts/loadtest/summarize-ingestion-metrics.sh" "$run_dir"; then
+      echo "[DIST] business summary generation failed (${run_dir}/backend.log)" >&2
+      if (( REQUIRE_BUSINESS_SUMMARY == 1 )); then
+        fail=1
+      fi
+    fi
+  else
+    echo "[DIST] backend log not found; skip business summary (${run_dir}/backend.log)" >&2
+    if (( REQUIRE_BUSINESS_SUMMARY == 1 )); then
+      fail=1
+    fi
+  fi
+
+  if (( REQUIRE_BUSINESS_SUMMARY == 1 )); then
+    if [[ ! -s "$summary_file" ]]; then
+      echo "[DIST] required business summary missing or empty: ${summary_file}" >&2
+      fail=1
+    fi
+  fi
   return "$fail"
 }
 
-ROOT_RUN_ID="$(date +%Y%m%d-%H%M%S)"
+ROOT_RUN_ID="$RUN_ID"
 ROOT_OUT_DIR="docs/loadtest-runs/${ROOT_RUN_ID}"
-mkdir -p "$ROOT_OUT_DIR"
+echo "[DIST] run_id=${ROOT_RUN_ID}"
+echo "[DIST] run_root=${ROOT_OUT_DIR}"
+if ! mkdir -p "$(dirname "$ROOT_OUT_DIR")"; then
+  echo "[DIST] failed to prepare parent directory for: ${ROOT_OUT_DIR}" >&2
+  exit 1
+fi
+if ! mkdir "$ROOT_OUT_DIR"; then
+  echo "[DIST] duplicate run directory exists: ${ROOT_OUT_DIR}" >&2
+  exit 1
+fi
 bootstrap_gradle_cache
 prepare_runtime
 

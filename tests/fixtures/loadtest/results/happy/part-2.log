@@ -1,0 +1,6 @@
+[SIM-HIVE] published=5
+[SIM-HIVE] failed=5
+[SIM-HIVE] throughput(msg/sec)=1.00
+[SIM-HIVE] published=20
+[SIM-HIVE] failed=1
+[SIM-HIVE] throughput(msg/sec)=4.25

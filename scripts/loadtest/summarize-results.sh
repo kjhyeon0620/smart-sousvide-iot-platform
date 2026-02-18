@@ -12,6 +12,11 @@ if [[ ! -d "$RUN_DIR" ]]; then
   exit 1
 fi
 
+RUN_ID="$(basename "$(dirname "$RUN_DIR")")"
+ATTEMPT_NAME="$(basename "$RUN_DIR")"
+ATTEMPT="${ATTEMPT_NAME#attempt-}"
+SUMMARY_FILE="${RUN_DIR}/connection-summary.json"
+
 PUBLISHED=0
 FAILED=0
 THROUGHPUT=0
@@ -39,8 +44,29 @@ for LOG in "$RUN_DIR"/part-*.log; do
 
 done
 
+ATTEMPTED=$(( PUBLISHED + FAILED ))
+SUCCESS_RATE="$(awk -v p="$PUBLISHED" -v t="$ATTEMPTED" 'BEGIN { if (t == 0) { printf "0.0000" } else { printf "%.4f", p / t } }')"
+SUCCESS_RATE_PCT="$(awk -v r="$SUCCESS_RATE" 'BEGIN { printf "%.2f", r * 100 }')"
+
+cat > "$SUMMARY_FILE" <<EOF
+{
+  "run_id": "${RUN_ID}",
+  "attempt": "${ATTEMPT}",
+  "parts": ${PARTS},
+  "published_total": ${PUBLISHED},
+  "failed_total": ${FAILED},
+  "attempted_total": ${ATTEMPTED},
+  "success_rate": ${SUCCESS_RATE},
+  "success_rate_pct": ${SUCCESS_RATE_PCT},
+  "throughput_total_msg_per_sec": ${THROUGHPUT},
+  "success_rate_formula": "published_total / (published_total + failed_total)"
+}
+EOF
+
 echo "[DIST] parts=${PARTS}"
 echo "[DIST] published_total=${PUBLISHED}"
 echo "[DIST] failed_total=${FAILED}"
 echo "[DIST] throughput_total(msg/sec)=${THROUGHPUT}"
+echo "[DIST] connection_success_rate=${SUCCESS_RATE_PCT}%"
 echo "[DIST] logs_dir=${RUN_DIR}"
+echo "[DIST] connection_summary=${SUMMARY_FILE}"
