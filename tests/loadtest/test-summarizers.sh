@@ -99,6 +99,7 @@ test_summarize_ingestion_happy_path() {
   assert_contains "${summary}" '"parse_fail_total": 10'
   assert_contains "${summary}" '"influx_ok_total": 180'
   assert_contains "${summary}" '"influx_fail_total": 20'
+  assert_contains "${summary}" '"influx_bypass_total": 0'
   assert_contains "${summary}" '"redis_ok_total": 170'
   assert_contains "${summary}" '"redis_fail_total": 30'
   assert_contains "${summary}" '"pipeline_success_total": 170'
@@ -106,6 +107,44 @@ test_summarize_ingestion_happy_path() {
   assert_contains "${summary}" '"pipeline_success_rate": 0.8500'
   assert_contains "${summary}" '"pipeline_success_rate_pct": 85.00'
   assert_contains "${summary}" '"pipeline_success_formula": "min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total"'
+  assert_contains "${summary}" '"core_pipeline_success_total": 170'
+  assert_contains "${summary}" '"core_pipeline_failure_total": 30'
+  assert_contains "${summary}" '"core_pipeline_success_rate": 0.8500'
+  assert_contains "${summary}" '"core_pipeline_success_rate_pct": 85.00'
+  assert_contains "${summary}" '"core_pipeline_success_formula": "min(parse_ok_total, redis_ok_total) / recv_total"'
+}
+
+test_summarize_ingestion_happy_path_with_influx_bypass_and_core_pipeline_divergence() {
+  local attempt_dir
+  attempt_dir="$(prepare_attempt_dir run-biz-core-diff 4)"
+
+  cp "${FIXTURE_DIR}/ingestion/core-pipeline-diff/backend.log" "${attempt_dir}/backend.log"
+
+  "${ROOT_DIR}/scripts/loadtest/summarize-ingestion-metrics.sh" "${attempt_dir}" >/dev/null
+
+  local summary="${attempt_dir}/business-summary.json"
+  [[ -f "${summary}" ]] || fail "business-summary.json was not created for core pipeline divergence"
+
+  assert_contains "${summary}" '"run_id": "run-biz-core-diff"'
+  assert_contains "${summary}" '"attempt": "4"'
+  assert_contains "${summary}" '"recv_total": 300'
+  assert_contains "${summary}" '"parse_ok_total": 280'
+  assert_contains "${summary}" '"parse_fail_total": 20'
+  assert_contains "${summary}" '"influx_ok_total": 200'
+  assert_contains "${summary}" '"influx_fail_total": 100'
+  assert_contains "${summary}" '"influx_bypass_total": 15'
+  assert_contains "${summary}" '"redis_ok_total": 250'
+  assert_contains "${summary}" '"redis_fail_total": 50'
+  assert_contains "${summary}" '"pipeline_success_total": 200'
+  assert_contains "${summary}" '"pipeline_failure_total": 100'
+  assert_contains "${summary}" '"pipeline_success_rate": 0.6667'
+  assert_contains "${summary}" '"pipeline_success_rate_pct": 66.67'
+  assert_contains "${summary}" '"pipeline_success_formula": "min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total"'
+  assert_contains "${summary}" '"core_pipeline_success_total": 250'
+  assert_contains "${summary}" '"core_pipeline_failure_total": 50'
+  assert_contains "${summary}" '"core_pipeline_success_rate": 0.8333'
+  assert_contains "${summary}" '"core_pipeline_success_rate_pct": 83.33'
+  assert_contains "${summary}" '"core_pipeline_success_formula": "min(parse_ok_total, redis_ok_total) / recv_total"'
 }
 
 test_summarize_ingestion_zero_recv_boundary() {
@@ -120,10 +159,16 @@ test_summarize_ingestion_zero_recv_boundary() {
   [[ -f "${summary}" ]] || fail "business-summary.json was not created for zero recv"
 
   assert_contains "${summary}" '"recv_total": 0'
+  assert_contains "${summary}" '"influx_bypass_total": 0'
   assert_contains "${summary}" '"pipeline_success_total": 0'
   assert_contains "${summary}" '"pipeline_failure_total": 0'
   assert_contains "${summary}" '"pipeline_success_rate": 0.0000'
   assert_contains "${summary}" '"pipeline_success_rate_pct": 0.00'
+  assert_contains "${summary}" '"core_pipeline_success_total": 0'
+  assert_contains "${summary}" '"core_pipeline_failure_total": 0'
+  assert_contains "${summary}" '"core_pipeline_success_rate": 0.0000'
+  assert_contains "${summary}" '"core_pipeline_success_rate_pct": 0.00'
+  assert_contains "${summary}" '"core_pipeline_success_formula": "min(parse_ok_total, redis_ok_total) / recv_total"'
 }
 
 test_summarize_ingestion_missing_totals_failure() {
@@ -174,6 +219,7 @@ test_summarize_ingestion_missing_required_totals_key_with_numeric_window_failure
 run_test "summarize-results happy path" test_summarize_results_happy_path
 run_test "summarize-results zero attempted boundary" test_summarize_results_zero_attempted_boundary
 run_test "summarize-ingestion happy path" test_summarize_ingestion_happy_path
+run_test "summarize-ingestion happy path with bypass and core divergence" test_summarize_ingestion_happy_path_with_influx_bypass_and_core_pipeline_divergence
 run_test "summarize-ingestion zero recv boundary" test_summarize_ingestion_zero_recv_boundary
 run_test "summarize-ingestion missing totals failure" test_summarize_ingestion_missing_totals_failure
 run_test "summarize-ingestion malformed totals failure" test_summarize_ingestion_malformed_totals_failure

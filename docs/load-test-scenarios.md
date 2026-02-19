@@ -67,6 +67,29 @@ kill "$BACKEND_LOG_PID"
 wait "$BACKEND_LOG_PID" 2>/dev/null || true
 ```
 
+## Phase F PR2 (HiveMQ 10k, Influx bypass mode)
+Backend config requirement (before run):
+- set `ingestion.influx.write-mode=bypass`
+- default is `strict`; PR2 load target uses `bypass` to isolate parse+redis/control path from Influx write pressure
+
+```bash
+RUN_ID="pr2-hive-10k-$(date +%Y%m%d-%H%M%S)"
+ATTEMPT_DIR="docs/loadtest-runs/${RUN_ID}/attempt-1"
+BACKEND_SERVICE="<backend-service>"
+
+# Start backend log collection before run; collector writes once attempt dir exists.
+(
+  until [[ -d "$ATTEMPT_DIR" ]]; do sleep 1; done
+  docker compose logs -f "$BACKEND_SERVICE" 2>&1 | tee "$ATTEMPT_DIR/backend.log"
+) &
+BACKEND_LOG_PID=$!
+
+SIM_TASK=mqttLoadTestHive RUN_ID="$RUN_ID" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=780 REQUIRE_BUSINESS_SUMMARY=1 ./scripts/loadtest/run-distributed.sh 10000 8 120 1 60 1
+
+kill "$BACKEND_LOG_PID"
+wait "$BACKEND_LOG_PID" 2>/dev/null || true
+```
+
 If backend runs outside Docker Compose, replace the `docker compose logs ...` command with your backend log source (for example `tail -F /path/to/backend.log | tee "$ATTEMPT_DIR/backend.log"`).
 
 Expected artifacts:
@@ -79,6 +102,12 @@ Expected artifacts:
 - `published_total`
 - `failed_total`
 - `throughput_total(msg/sec)`
+- `recv_total`
+- `parse_ok_total`, `parse_fail_total`
+- `influx_ok_total`, `influx_fail_total`, `influx_bypass_total`
+- `redis_ok_total`, `redis_fail_total`
+- `pipeline_success_total` (overall)
+- `core_pipeline_success_total` (parse+redis)
 - per-part logs: `docs/loadtest-runs/<run-id>/attempt-<n>/part-*.log`
 - failure signatures:
   - `unable to create native thread`
@@ -92,6 +121,7 @@ Expected artifacts:
 Split aggregation formulas:
 - connection success rate = `published_total / (published_total + failed_total)`
 - business pipeline success rate = `min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total`
+- business core pipeline success rate = `min(parse_ok_total, redis_ok_total) / recv_total`
 
 ## Service Objectives (SLO)
 - Ingestion success rate: `>= 99.9%`
