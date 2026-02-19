@@ -1,0 +1,2 @@
+2026-02-18 00:00:00 [INGEST-METRICS/1s] window recv=20 parseOk=20 parseFail=0 influxOk=18 influxFail=2 redisOk=17 redisFail=3 | totals recv=100 parseOk=95 parseFail=5 influxOk=90 influxFail=10 redisOk=85 redisFail=15
+2026-02-18 00:00:01 [INGEST-METRICS/1s] window recv=10 parseOk=10 parseFail=0 influxOk=9 influxFail=1 redisOk=9 redisFail=1 | totals recv=200 parseOk=190 parseFail=10 influxOk=180 influxFail=20 redisOk=170 redisFail=30

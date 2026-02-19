@@ -132,3 +132,13 @@
 - The immediate bottleneck is the Paho client model behavior under high concurrency on this host/runtime.
 - Broker/infrastructure is not the primary blocker because HiveMQ path scaled to 3000 with zero failures.
 - Default high-traffic baseline should use HiveMQ simulator path; Paho path remains as comparison and technical debt item.
+
+## Phase F PR1 Split Table (HiveMQ 5k)
+
+Source artifacts:
+- `docs/loadtest-runs/<run-id>/attempt-<n>/connection-summary.json`
+- `docs/loadtest-runs/<run-id>/attempt-<n>/business-summary.json`
+
+| Run ID | Attempt | Command | Connection Published | Connection Failed | Connection Success(%) | Connection Throughput(msg/s) | Business recv | Business pipeline success | Business Success(%) | Parse Fail | Influx Fail | Redis Fail | Notes |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| `<run-id>` | `<n>` | `SIM_TASK=mqttLoadTestHive RUN_ID=<run-id> ... ./scripts/loadtest/run-distributed.sh 5000 5 120 1 60 1` | `<published_total>` | `<failed_total>` | `<success_rate_pct>` | `<throughput_total_msg_per_sec>` | `<recv_total>` | `<pipeline_success_total>` | `<pipeline_success_rate_pct>` | `<parse_fail_total>` | `<influx_fail_total>` | `<redis_fail_total>` | `PR1` |

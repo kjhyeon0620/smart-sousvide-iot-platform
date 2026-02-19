@@ -1,0 +1,1371 @@
+diff --git a/docs/load-test-results.md b/docs/load-test-results.md
+index 472f72c..7ff121a 100644
+--- a/docs/load-test-results.md
++++ b/docs/load-test-results.md
+@@ -1,134 +1,144 @@
+-# MQTT Load Test Results (Baseline)
+-
+-## Test Environment
+-- Host: Windows 11, Intel i5-1155G7, RAM 16GB
+-- Runtime: Java 17, Gradle 9.2.1
+-- Broker: Docker Compose `mosquitto` only (`tcp://localhost:1883`)
+-- Simulator: `MqttLoadSimulator` (MemoryPersistence, parallel connect)
+-
+-## Test Method
+-- Common params:
+-  - `messages-per-second=1`
+-  - `duration-seconds=60`
+-  - `qos=1`
+-- Stop criteria:
+-  - `OutOfMemoryError: unable to create native thread`
+-  - `pthread_create failed (EAGAIN)`
+-  - severe host slowdown
+-
+-## Commands Used
+-```bash
+-./gradlew mqttLoadTest --args="--connections=300 --connect-parallelism=100 --messages-per-second=1 --duration-seconds=60 --qos=1"
+-./gradlew mqttLoadTest --args="--connections=500 --connect-parallelism=100 --messages-per-second=1 --duration-seconds=60 --qos=1"
+-./gradlew mqttLoadTest --args="--connections=1000 --connect-parallelism=120 --messages-per-second=1 --duration-seconds=60 --qos=1"
+-./gradlew mqttLoadTest --args="--connections=1500 --connect-parallelism=150 --messages-per-second=1 --duration-seconds=60 --qos=1"
+-./gradlew mqttLoadTest --args="--connections=2000 --connect-parallelism=180 --messages-per-second=1 --duration-seconds=60 --qos=1"
+-./gradlew mqttLoadTest --args="--connections=2500 --connect-parallelism=200 --messages-per-second=1 --duration-seconds=60 --qos=1"
+-```
+-
+-## Results
+-| Stage | Connections | Connect Parallelism | Duration(s) | Published | Failed | Throughput (msg/s) | Result |
+-|---|---:|---:|---:|---:|---:|---:|---|
+-| 1 | 300 | 100 | 66.959 | 18,300 | 0 | 273.30 | Success |
+-| 2 | 500 | 100 | 67.124 | 30,500 | 0 | 454.38 | Success |
+-| 3 | 1000 | 120 | 67.552 | 61,000 | 0 | 903.01 | Success |
+-| 4 | 1500 | 150 | 68.178 | 91,500 | 0 | 1,342.08 | Success |
+-| 5 | 2000 | 180 | 69.051 | 122,000 | 0 | 1,766.81 | Success |
+-| 6 | 2500 | 200 | - | - | - | - | Failed (native thread limit) |
+-
+-## Failure Evidence (2500)
+-- `java.lang.OutOfMemoryError: unable to create native thread`
+-- `pthread_create failed (EAGAIN)`
+-
+-## Baseline Conclusion
+-- Stable up to `2000` concurrent clients in current environment.
+-- `2500` exceeded thread/resource limits before steady publish phase.
+-
+-## Next Optimization Targets
+-1. Lower per-client thread overhead in simulator.
+-2. Split load generation into multi-process runners (e.g., 1250 + 1250).
+-3. Tune connect parallelism vs host thread ceiling.
+-4. Re-run 2500 and 3000 with the same metrics schema.
+-
+-## Round 2 Plan (Distributed Simulator)
+-- Use `scripts/loadtest/run-distributed.sh` to run multiple simulator processes.
+-- Partition example for 2500:
+-  - process A: 1250 with `start-index=0`
+-  - process B: 1250 with `start-index=1250`
+-- Keep same `messages-per-second`, `duration`, and `qos` for A/B comparison with baseline.
+-
+-## Round 2 Execution (Distributed)
+-
+-### Smoke
+-- command: `./scripts/loadtest/run-distributed.sh 100 2 30 1 10 1`
+-- result:
+-  - parts: 2
+-  - published_total: 1085
+-  - failed_total: 15
+-  - throughput_total: 94.23 msg/s
+-
+-### 2500 Distributed (1250 x 2)
+-- command: `./scripts/loadtest/run-distributed.sh 2500 2 120 1 60 1`
+-- logs: `docs/loadtest-runs/20260213-163238`
+-- result:
+-  - process A (`part-0`): success, published=76250, failed=0, throughput=1123.59 msg/s
+-  - process B (`part-1`): failure with thread ceiling
+-- failure evidence:
+-  - `OutOfMemoryError: unable to create native thread`
+-  - `pthread_create failed (EAGAIN)`
+-
+-### Round 2 Conclusion
+-- Distributed mode improved reproducibility and removed local persistence directory side-effects.
+-- However, on current host and runtime, 2500 total concurrent clients still exceeds native thread limits.
+-
+-## Round 3 Execution (Adaptive Fallback)
+-
+-### Script Enhancements
+-- `run-distributed.sh` now retries automatically on thread-limit failures.
+-- Fallback strategy:
+-  1. increase partition count first
+-  2. then reduce connect parallelism
+-
+-### Run A
+-- command: `MAX_ATTEMPTS=4 MIN_PARALLELISM=30 MAX_PARTITIONS=8 ./scripts/loadtest/run-distributed.sh 2500 2 120 1 60 1`
+-- logs: `docs/loadtest-runs/20260213-165623`
+-- attempt-1 outcome:
+-  - part-0: success (`published=76250`, `failed=0`, `throughput=1123.16`)
+-  - part-1: failed with thread ceiling (`EAGAIN`, `unable to create native thread`)
+-- fallback moved to attempt-2 (`parallelism 120 -> 60`), but run remained unstable.
+-
+-### Run B
+-- command: `MAX_ATTEMPTS=4 MIN_PARALLELISM=30 MAX_PARTITIONS=8 ./scripts/loadtest/run-distributed.sh 2500 3 80 1 60 1`
+-- logs: `docs/loadtest-runs/20260213-170440`
+-- attempt-1 outcome:
+-  - part-1: success (`published=50813`, `failed=0`, `throughput=753.50`)
+-  - part-0 / part-2: failed with thread ceiling (`EAGAIN`, `unable to create native thread`)
+-- run was terminated due prolonged unstable state.
+-
+-### Round 3 Conclusion
+-- Adaptive fallback improved orchestration, observability, and reproducibility of failure handling.
+-- Root bottleneck remains unresolved: per-client native thread footprint of current MQTT client model.
+-- On current host/runtime, `2500` is still not stably repeatable even with distributed and adaptive retry strategy.
+-
+-## Round 4 Root-Cause Verification (Paho vs HiveMQ)
+-
+-### Objective
+-- Verify whether the scaling limit is broker/infrastructure or MQTT client model.
+-
+-### 1500 Connections Cross-Check
+-| Model | Command | Result | Evidence |
+-|---|---|---|---|
+-| Paho | `SIM_TASK=mqttLoadTest MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1` | Failed | parts exited with `code=143`, Paho logs include `Timed out as no activity` |
+-| HiveMQ | `SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1` | Success | `published_total=46500`, `failed_total=0`, `throughput_total=1550.00` |
+-
+-### HiveMQ Scale-Up Validation
+-| Connections | Partitions | Parallelism | Published | Failed | Throughput (msg/s) | Result | Run ID |
+-|---:|---:|---:|---:|---:|---:|---|---|
+-| 2000 | 3 | 120 | 61,334 | 0 | 2,044.46 | Success | `20260213-185957` |
+-| 2500 | 3 | 120 | 77,500 | 0 | 2,583.34 | Success | `20260213-190212` |
+-| 3000 | 4 | 120 | 93,000 | 0 | 3,100.00 | Success | `20260213-190513` |
+-
++# MQTT Load Test Results (Baseline)
++
++## Test Environment
++- Host: Windows 11, Intel i5-1155G7, RAM 16GB
++- Runtime: Java 17, Gradle 9.2.1
++- Broker: Docker Compose `mosquitto` only (`tcp://localhost:1883`)
++- Simulator: `MqttLoadSimulator` (MemoryPersistence, parallel connect)
++
++## Test Method
++- Common params:
++  - `messages-per-second=1`
++  - `duration-seconds=60`
++  - `qos=1`
++- Stop criteria:
++  - `OutOfMemoryError: unable to create native thread`
++  - `pthread_create failed (EAGAIN)`
++  - severe host slowdown
++
++## Commands Used
++```bash
++./gradlew mqttLoadTest --args="--connections=300 --connect-parallelism=100 --messages-per-second=1 --duration-seconds=60 --qos=1"
++./gradlew mqttLoadTest --args="--connections=500 --connect-parallelism=100 --messages-per-second=1 --duration-seconds=60 --qos=1"
++./gradlew mqttLoadTest --args="--connections=1000 --connect-parallelism=120 --messages-per-second=1 --duration-seconds=60 --qos=1"
++./gradlew mqttLoadTest --args="--connections=1500 --connect-parallelism=150 --messages-per-second=1 --duration-seconds=60 --qos=1"
++./gradlew mqttLoadTest --args="--connections=2000 --connect-parallelism=180 --messages-per-second=1 --duration-seconds=60 --qos=1"
++./gradlew mqttLoadTest --args="--connections=2500 --connect-parallelism=200 --messages-per-second=1 --duration-seconds=60 --qos=1"
++```
++
++## Results
++| Stage | Connections | Connect Parallelism | Duration(s) | Published | Failed | Throughput (msg/s) | Result |
++|---|---:|---:|---:|---:|---:|---:|---|
++| 1 | 300 | 100 | 66.959 | 18,300 | 0 | 273.30 | Success |
++| 2 | 500 | 100 | 67.124 | 30,500 | 0 | 454.38 | Success |
++| 3 | 1000 | 120 | 67.552 | 61,000 | 0 | 903.01 | Success |
++| 4 | 1500 | 150 | 68.178 | 91,500 | 0 | 1,342.08 | Success |
++| 5 | 2000 | 180 | 69.051 | 122,000 | 0 | 1,766.81 | Success |
++| 6 | 2500 | 200 | - | - | - | - | Failed (native thread limit) |
++
++## Failure Evidence (2500)
++- `java.lang.OutOfMemoryError: unable to create native thread`
++- `pthread_create failed (EAGAIN)`
++
++## Baseline Conclusion
++- Stable up to `2000` concurrent clients in current environment.
++- `2500` exceeded thread/resource limits before steady publish phase.
++
++## Next Optimization Targets
++1. Lower per-client thread overhead in simulator.
++2. Split load generation into multi-process runners (e.g., 1250 + 1250).
++3. Tune connect parallelism vs host thread ceiling.
++4. Re-run 2500 and 3000 with the same metrics schema.
++
++## Round 2 Plan (Distributed Simulator)
++- Use `scripts/loadtest/run-distributed.sh` to run multiple simulator processes.
++- Partition example for 2500:
++  - process A: 1250 with `start-index=0`
++  - process B: 1250 with `start-index=1250`
++- Keep same `messages-per-second`, `duration`, and `qos` for A/B comparison with baseline.
++
++## Round 2 Execution (Distributed)
++
++### Smoke
++- command: `./scripts/loadtest/run-distributed.sh 100 2 30 1 10 1`
++- result:
++  - parts: 2
++  - published_total: 1085
++  - failed_total: 15
++  - throughput_total: 94.23 msg/s
++
++### 2500 Distributed (1250 x 2)
++- command: `./scripts/loadtest/run-distributed.sh 2500 2 120 1 60 1`
++- logs: `docs/loadtest-runs/20260213-163238`
++- result:
++  - process A (`part-0`): success, published=76250, failed=0, throughput=1123.59 msg/s
++  - process B (`part-1`): failure with thread ceiling
++- failure evidence:
++  - `OutOfMemoryError: unable to create native thread`
++  - `pthread_create failed (EAGAIN)`
++
++### Round 2 Conclusion
++- Distributed mode improved reproducibility and removed local persistence directory side-effects.
++- However, on current host and runtime, 2500 total concurrent clients still exceeds native thread limits.
++
++## Round 3 Execution (Adaptive Fallback)
++
++### Script Enhancements
++- `run-distributed.sh` now retries automatically on thread-limit failures.
++- Fallback strategy:
++  1. increase partition count first
++  2. then reduce connect parallelism
++
++### Run A
++- command: `MAX_ATTEMPTS=4 MIN_PARALLELISM=30 MAX_PARTITIONS=8 ./scripts/loadtest/run-distributed.sh 2500 2 120 1 60 1`
++- logs: `docs/loadtest-runs/20260213-165623`
++- attempt-1 outcome:
++  - part-0: success (`published=76250`, `failed=0`, `throughput=1123.16`)
++  - part-1: failed with thread ceiling (`EAGAIN`, `unable to create native thread`)
++- fallback moved to attempt-2 (`parallelism 120 -> 60`), but run remained unstable.
++
++### Run B
++- command: `MAX_ATTEMPTS=4 MIN_PARALLELISM=30 MAX_PARTITIONS=8 ./scripts/loadtest/run-distributed.sh 2500 3 80 1 60 1`
++- logs: `docs/loadtest-runs/20260213-170440`
++- attempt-1 outcome:
++  - part-1: success (`published=50813`, `failed=0`, `throughput=753.50`)
++  - part-0 / part-2: failed with thread ceiling (`EAGAIN`, `unable to create native thread`)
++- run was terminated due prolonged unstable state.
++
++### Round 3 Conclusion
++- Adaptive fallback improved orchestration, observability, and reproducibility of failure handling.
++- Root bottleneck remains unresolved: per-client native thread footprint of current MQTT client model.
++- On current host/runtime, `2500` is still not stably repeatable even with distributed and adaptive retry strategy.
++
++## Round 4 Root-Cause Verification (Paho vs HiveMQ)
++
++### Objective
++- Verify whether the scaling limit is broker/infrastructure or MQTT client model.
++
++### 1500 Connections Cross-Check
++| Model | Command | Result | Evidence |
++|---|---|---|---|
++| Paho | `SIM_TASK=mqttLoadTest MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1` | Failed | parts exited with `code=143`, Paho logs include `Timed out as no activity` |
++| HiveMQ | `SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1` | Success | `published_total=46500`, `failed_total=0`, `throughput_total=1550.00` |
++
++### HiveMQ Scale-Up Validation
++| Connections | Partitions | Parallelism | Published | Failed | Throughput (msg/s) | Result | Run ID |
++|---:|---:|---:|---:|---:|---:|---|---|
++| 2000 | 3 | 120 | 61,334 | 0 | 2,044.46 | Success | `20260213-185957` |
++| 2500 | 3 | 120 | 77,500 | 0 | 2,583.34 | Success | `20260213-190212` |
++| 3000 | 4 | 120 | 93,000 | 0 | 3,100.00 | Success | `20260213-190513` |
++
+ ### Round 4 Conclusion
+ - The immediate bottleneck is the Paho client model behavior under high concurrency on this host/runtime.
+ - Broker/infrastructure is not the primary blocker because HiveMQ path scaled to 3000 with zero failures.
+ - Default high-traffic baseline should use HiveMQ simulator path; Paho path remains as comparison and technical debt item.
++
++## Phase F PR1 Split Table (HiveMQ 5k)
++
++Source artifacts:
++- `docs/loadtest-runs/<run-id>/attempt-<n>/connection-summary.json`
++- `docs/loadtest-runs/<run-id>/attempt-<n>/business-summary.json`
++
++| Run ID | Attempt | Command | Connection Published | Connection Failed | Connection Success(%) | Connection Throughput(msg/s) | Business recv | Business pipeline success | Business Success(%) | Parse Fail | Influx Fail | Redis Fail | Notes |
++|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
++| `<run-id>` | `<n>` | `SIM_TASK=mqttLoadTestHive RUN_ID=<run-id> ... ./scripts/loadtest/run-distributed.sh 5000 5 120 1 60 1` | `<published_total>` | `<failed_total>` | `<success_rate_pct>` | `<throughput_total_msg_per_sec>` | `<recv_total>` | `<pipeline_success_total>` | `<pipeline_success_rate_pct>` | `<parse_fail_total>` | `<influx_fail_total>` | `<redis_fail_total>` | `PR1` |
+diff --git a/docs/load-test-scenarios.md b/docs/load-test-scenarios.md
+index 38e9739..856b358 100644
+--- a/docs/load-test-scenarios.md
++++ b/docs/load-test-scenarios.md
+@@ -1,44 +1,46 @@
+-# MQTT Load Test Scenarios (Local)
+-
+-## Pre-check
+-```bash
+-docker compose ps
+-```
+-
+-Run with at least Mosquitto up:
+-- `smart-sousvide-mqtt` on `localhost:1883`
+-
+-## Current Execution Model
+-- Use `scripts/loadtest/run-distributed.sh`.
+-- Script does one-time runtime preparation, then runs each partition via direct `java -cp ...` execution.
+-- This avoids per-partition Gradle startup overhead.
+-
+-## Common Arguments
+-```bash
+-./scripts/loadtest/run-distributed.sh <totalConnections> <partitions> <connectParallelism> <mps> <durationSec> <qos>
+-```
+-
+-## Key Environment Variables
++# MQTT Load Test Scenarios (Local)
++
++## Pre-check
++```bash
++docker compose ps
++```
++
++Run with at least Mosquitto up:
++- `smart-sousvide-mqtt` on `localhost:1883`
++
++## Current Execution Model
++- Use `scripts/loadtest/run-distributed.sh`.
++- Script does one-time runtime preparation, then runs each partition via direct `java -cp ...` execution.
++- This avoids per-partition Gradle startup overhead.
++
++## Common Arguments
++```bash
++./scripts/loadtest/run-distributed.sh <totalConnections> <partitions> <connectParallelism> <mps> <durationSec> <qos>
++```
++
++## Key Environment Variables
+ - `SIM_TASK`
+   - `mqttLoadTest`: Paho simulator
+   - `mqttLoadTestHive`: HiveMQ simulator
++- `RUN_ID` (optional; default: timestamp `YYYYMMDD-HHMMSS`)
+ - `MAX_ATTEMPTS` (default: 4)
+ - `MIN_PARALLELISM` (default: 40)
+ - `MAX_PARTITIONS` (default: 6)
+ - `PART_TIMEOUT_SECONDS` (default: `duration + 120`)
+-
+-## Recommended Validation Sequence
+-1. Paho smoke
+-```bash
+-SIM_TASK=mqttLoadTest MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=180 ./scripts/loadtest/run-distributed.sh 200 1 40 1 10 1
+-```
+-
+-2. Model cross-check at same load
+-```bash
+-SIM_TASK=mqttLoadTest MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1
+-SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1
+-```
+-
++- `REQUIRE_BUSINESS_SUMMARY` (default: 0; set `1` to fail attempt when split aggregation artifacts are missing)
++
++## Recommended Validation Sequence
++1. Paho smoke
++```bash
++SIM_TASK=mqttLoadTest MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=180 ./scripts/loadtest/run-distributed.sh 200 1 40 1 10 1
++```
++
++2. Model cross-check at same load
++```bash
++SIM_TASK=mqttLoadTest MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1
++SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1500 2 120 1 30 1
++```
++
+ 3. HiveMQ scale-up baseline
+ ```bash
+ SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=360 ./scripts/loadtest/run-distributed.sh 2000 3 120 1 30 1
+@@ -46,16 +48,97 @@ SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=420 ./scripts/load
+ SIM_TASK=mqttLoadTestHive MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=480 ./scripts/loadtest/run-distributed.sh 3000 4 120 1 30 1
+ ```
+ 
++## Phase F PR1 (HiveMQ 5k)
++```bash
++RUN_ID="pr1-hive-5k-$(date +%Y%m%d-%H%M%S)"
++ATTEMPT_DIR="docs/loadtest-runs/${RUN_ID}/attempt-1"
++BACKEND_SERVICE="<backend-service>"
++
++# Start backend log collection before run; collector writes once attempt dir exists.
++(
++  until [[ -d "$ATTEMPT_DIR" ]]; do sleep 1; done
++  docker compose logs -f "$BACKEND_SERVICE" 2>&1 | tee "$ATTEMPT_DIR/backend.log"
++) &
++BACKEND_LOG_PID=$!
++
++SIM_TASK=mqttLoadTestHive RUN_ID="$RUN_ID" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=540 REQUIRE_BUSINESS_SUMMARY=1 ./scripts/loadtest/run-distributed.sh 5000 5 120 1 60 1
++
++kill "$BACKEND_LOG_PID"
++wait "$BACKEND_LOG_PID" 2>/dev/null || true
++```
++
++If backend runs outside Docker Compose, replace the `docker compose logs ...` command with your backend log source (for example `tail -F /path/to/backend.log | tee "$ATTEMPT_DIR/backend.log"`).
++
++Expected artifacts:
++- per-part logs: `docs/loadtest-runs/<run-id>/attempt-<n>/part-*.log`
++- connection summary: `docs/loadtest-runs/<run-id>/attempt-<n>/connection-summary.json`
++- business summary: `docs/loadtest-runs/<run-id>/attempt-<n>/business-summary.json`
++- backend ingest log source: `docs/loadtest-runs/<run-id>/attempt-<n>/backend.log`
++
+ ## Metrics To Record
+ - `published_total`
+ - `failed_total`
+ - `throughput_total(msg/sec)`
+-- per-part logs: `docs/loadtest-runs/<run-id>/attempt-<n>/part-*.log`
+-- failure signatures:
+-  - `unable to create native thread`
+-  - `pthread_create failed (EAGAIN)`
+-  - `Timed out as no activity` (Paho keepalive path)
+-
++- per-part logs: `docs/loadtest-runs/<run-id>/attempt-<n>/part-*.log`
++- failure signatures:
++  - `unable to create native thread`
++  - `pthread_create failed (EAGAIN)`
++  - `Timed out as no activity` (Paho keepalive path)
++
+ ## Interpretation Rule
+ - If Paho fails and HiveMQ succeeds under same parameters, classify as client-model bottleneck.
+ - Use HiveMQ path as default baseline for further backend capacity validation.
++
++Split aggregation formulas:
++- connection success rate = `published_total / (published_total + failed_total)`
++- business pipeline success rate = `min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total`
++
++## Service Objectives (SLO)
++- Ingestion success rate: `>= 99.9%`
++- Parse failure rate: `< 0.1%`
++- Influx write failure rate: `< 0.5%`
++- Redis heartbeat failure rate: `< 0.5%`
++- p95 end-to-end ingest latency: `< 200ms` (local benchmark target)
++
++## Reliability Plan (No Schedule Change)
++- Keep current phase order, but add reliability gates to each phase:
++1. DLQ-ready failure classification
++2. replay/retry strategy evidence
++3. idempotency policy for duplicate telemetry
++
++Definition notes:
++- DLQ-ready: parse/storage failures can be separated and counted independently.
++- Idempotency policy: `deviceId + timestamp(or sequence)` key strategy documented and testable.
++
++## Performance Methodology
++- Separate metrics into:
++1. connection-level success (client connect/publish)
++2. business-level success (parse/influx/redis pipeline)
++- Run both open-loop and closed-loop style checks:
++  - open-loop: fixed input rate, observe drop/failure behavior
++  - closed-loop: feedback-limited publish, observe saturation point
++- Always include model cross-check (`Paho vs HiveMQ`) before claiming infra bottleneck.
++
++## Chaos and Failure Injection
++- Mandatory scenarios:
++1. Redis unavailable during ingestion
++2. Influx write latency/failure spike
++3. Broker restart during sustained load
++- Required outputs per scenario:
++  - failure signature
++  - service behavior (degrade/recover)
++  - MTTR measurement
++
++## Security and Financial-Grade Readiness
++- Add and track minimum controls:
++1. MQTT TLS enablement plan
++2. topic ACL policy
++3. secret management path
++4. audit log policy (who/when/what for control and fail-safe events)
++
++## Portfolio Deliverables
++- Keep technical artifacts updated each round:
++1. benchmark table with command + run-id + result
++2. bottleneck classification rationale
++3. ADR updates for major design decisions
++4. blog fact report (`Context/Problem/Solution/Key Code/Lesson`)
+diff --git a/docs/project-plan.md b/docs/project-plan.md
+new file mode 100644
+index 0000000..c0eabb9
+--- /dev/null
++++ b/docs/project-plan.md
+@@ -0,0 +1,127 @@
++# Smart Sous-vide IoT Platform - Master Project Plan
++
++## 1. Project Objective
++- Legacy sous-vide 기기를 비침습 방식으로 스마트 IoT 디바이스화한다.
++- 고트래픽(단계적으로 10k 목표) 환경에서 수집/저장/제어/감시 백엔드의 안정성을 검증한다.
++- 포트폴리오 관점에서 기능 구현뿐 아니라 성능, 신뢰성, 운영성, 보안성을 정량적으로 입증한다.
++
++## 2. Scope
++### In Scope
++- MQTT 기반 디바이스 상태 수집 파이프라인
++- JSON 파싱/검증, InfluxDB 저장, Redis heartbeat 업데이트
++- 제어 판단(ControlDecisionEngine), Watchdog/Fail-safe
++- 부하 테스트 시뮬레이터 및 분산 실행 체계
++- 관측성(지표/로그), 장애 대응 시나리오, 결과 문서화
++
++### Out of Scope
++- 하드웨어 대량 실장(수천 대 물리 장치 구성)
++- 클라우드 상용 배포 최적화(비용/운영 고도화)
++- 프로덕션급 완전 보안 인증 체계(단, 최소 보안 설계는 포함)
++
++## 3. System Architecture Summary
++- Edge: ESP32 + DS18B20 + SG90 Servo
++- Protocol: MQTT over Wi-Fi
++- Backend: Spring Boot 3.2.x, Layered + Event-Driven(Spring Integration)
++- Data:
++  - InfluxDB v2: temperature/time-series
++  - Redis: device state/heartbeat/watchdog state
++  - MySQL: metadata
++- Infra: Docker Compose (local)
++
++## 4. Success Criteria (SLO)
++- Ingestion success rate: `>= 99.9%`
++- Parse failure rate: `< 0.1%`
++- Influx write failure rate: `< 0.5%`
++- Redis heartbeat failure rate: `< 0.5%`
++- p95 ingest latency(local benchmark): `< 200ms`
++- 부하 검증: HiveMQ 모델 기준 3k+ 안정 처리, 이후 5k/10k 단계적 검증
++
++## 5. Phase Plan
++## Phase A - Foundation (Done)
++- Local infra 구성(Mosquitto/MySQL/Redis/InfluxDB)
++- MQTT inbound 채널 수신 파이프라인 구성
++- 기본 DTO/파싱/서비스 구조 확립
++
++## Phase B - Core Ingestion (Done)
++- strict DTO parsing + validation
++- Influx/Redis 저장 연동
++- 제어 판단 로직(deadband) 적용
++
++## Phase C - Safety and Fail-safe (Done)
++- Watchdog 스캔/오프라인 감지
++- Fail-safe 이벤트/알림 경로 구현
++
++## Phase D - Load Test Framework (Done)
++- 분산 부하 실행 스크립트 및 집계
++- Paho/HiveMQ 모델 비교 체계 구축
++- Root-cause 분리: Paho 고연결 불안정, HiveMQ 3k 안정 확인
++
++## Phase E - Ingestion Observability (In Progress)
++- 단계별 지표:
++  - MQTT recv
++  - parse success/failure
++  - Influx success/failure
++  - Redis success/failure
++- 1초 주기 델타/누적 로그 기반 검증
++
++## Phase F - High Scale Validation (Planned)
++- HiveMQ 기준 5k/10k 시나리오 수행
++- connection-level vs business-level 성공률 분리 평가
++- run-id 기반 결과표와 실패 원인 분류 문서화
++- Completion definition (PR1):
++  - HiveMQ 5k run 완료 시 `docs/loadtest-runs/<run-id>/attempt-1/connection-summary.json` 생성
++  - 동일 attempt에 `docs/loadtest-runs/<run-id>/attempt-1/business-summary.json` 생성
++  - `docs/load-test-results.md`에 run_id + attempt 기준 split 집계 행 반영
++
++## Phase G - Reliability and Security Hardening (Planned)
++- DLQ/replay 전략 문서화 및 적용
++- idempotency(중복 수신 방지) 정책 수립
++- Chaos 시나리오(Redis down/Influx 지연/Broker restart) 수행
++- 최소 보안 통제(TLS/ACL/secret/audit-log) 설계 반영
++
++## 6. Verification Strategy
++- Open-loop + Closed-loop 부하 검증 병행
++- 모델 교차검증:
++  - 동일 조건 Paho vs HiveMQ 비교 후 병목 분리
++- 결과 필수 항목:
++  - command, run-id, published/failed/throughput
++  - 파이프라인 단계별 실패율
++  - 원인 분류(클라이언트/앱/브로커/호스트)
++
++## 7. Risks and Mitigations
++- Host resource ceiling (thread/file/socket)
++  - 분산 파티션, parallelism 튜닝, timeout 가드
++- 관측 지표 부족으로 원인 불명확
++  - 단계별 계측 + 1초 로그 스냅샷
++- 특정 MQTT client model 편향
++  - Paho/HiveMQ 교차검증을 기본 절차로 유지
++- 장애 상황 재현 부족
++  - Chaos 테스트를 정기 시나리오로 편입
++
++## 8. Deliverables
++- Code:
++  - ingestion/control/watchdog/loadtest 구현 코드
++- Documents:
++  - `docs/load-test-scenarios.md`
++  - `docs/load-test-results.md`
++  - `docs/adr/*`
++  - `docs/ai-collaboration.md`
++  - `docs/project-plan.md` (this file)
++- Portfolio outputs:
++  - 단계별 성능 리포트(정량 수치 포함)
++  - 병목 원인 분석 및 개선 근거
++  - 블로그 팩트 리포트(Context/Problem/Solution/Key Code/Lesson)
++
++## 9. Working Rules
++- 이슈 단위로 개발/검증/문서화/PR을 완료한다.
++- 작업 종료 시 아래를 항상 제공한다:
++  - 변경 파일/구현 방식/설계 이유/리스크/테스트 결과
++  - 커밋 메시지
++  - PR 본문
++  - 블로그 팩트 리포트
++
++## 10. Source of Truth
++- 전체 계획: `docs/project-plan.md`
++- 부하 테스트 실행 계획: `docs/load-test-scenarios.md`
++- 부하 테스트 결과 기록: `docs/load-test-results.md`
++- 협업 프로토콜: `docs/ai-collaboration.md`
+diff --git a/scripts/loadtest/run-distributed.sh b/scripts/loadtest/run-distributed.sh
+index 2f69719..5988511 100644
+--- a/scripts/loadtest/run-distributed.sh
++++ b/scripts/loadtest/run-distributed.sh
+@@ -11,6 +11,7 @@ MPS="${4:-1}"
+ DURATION="${5:-60}"
+ QOS="${6:-1}"
+ SIM_TASK="${SIM_TASK:-mqttLoadTest}"
++RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
+ GRADLE_USER_HOME_DIR="${GRADLE_USER_HOME_DIR:-$ROOT_DIR/.gradle-local}"
+ 
+ MAX_ATTEMPTS="${MAX_ATTEMPTS:-4}"
+@@ -19,6 +20,7 @@ MAX_PARTITIONS="${MAX_PARTITIONS:-6}"
+ PART_TIMEOUT_SECONDS="${PART_TIMEOUT_SECONDS:-$((DURATION + 120))}"
+ GRADLE_DAEMON_FLAG="${GRADLE_DAEMON_FLAG:---no-daemon}"
+ JVM_OPTS="${JVM_OPTS:-}"
++REQUIRE_BUSINESS_SUMMARY="${REQUIRE_BUSINESS_SUMMARY:-0}"
+ 
+ if (( PARTITIONS < 1 )); then
+   echo "PARTITIONS must be >= 1" >&2
+@@ -143,13 +145,46 @@ run_once() {
+     rc=0
+   done
+ 
+-  "$ROOT_DIR/scripts/loadtest/summarize-results.sh" "$run_dir" || true
++  if ! "$ROOT_DIR/scripts/loadtest/summarize-results.sh" "$run_dir"; then
++    echo "[DIST] connection summary generation failed (${run_dir})" >&2
++    fail=1
++  fi
++  local summary_file="$run_dir/business-summary.json"
++  if [[ -f "$run_dir/backend.log" ]]; then
++    if ! "$ROOT_DIR/scripts/loadtest/summarize-ingestion-metrics.sh" "$run_dir"; then
++      echo "[DIST] business summary generation failed (${run_dir}/backend.log)" >&2
++      if (( REQUIRE_BUSINESS_SUMMARY == 1 )); then
++        fail=1
++      fi
++    fi
++  else
++    echo "[DIST] backend log not found; skip business summary (${run_dir}/backend.log)" >&2
++    if (( REQUIRE_BUSINESS_SUMMARY == 1 )); then
++      fail=1
++    fi
++  fi
++
++  if (( REQUIRE_BUSINESS_SUMMARY == 1 )); then
++    if [[ ! -s "$summary_file" ]]; then
++      echo "[DIST] required business summary missing or empty: ${summary_file}" >&2
++      fail=1
++    fi
++  fi
+   return "$fail"
+ }
+ 
+-ROOT_RUN_ID="$(date +%Y%m%d-%H%M%S)"
++ROOT_RUN_ID="$RUN_ID"
+ ROOT_OUT_DIR="docs/loadtest-runs/${ROOT_RUN_ID}"
+-mkdir -p "$ROOT_OUT_DIR"
++echo "[DIST] run_id=${ROOT_RUN_ID}"
++echo "[DIST] run_root=${ROOT_OUT_DIR}"
++if ! mkdir -p "$(dirname "$ROOT_OUT_DIR")"; then
++  echo "[DIST] failed to prepare parent directory for: ${ROOT_OUT_DIR}" >&2
++  exit 1
++fi
++if ! mkdir "$ROOT_OUT_DIR"; then
++  echo "[DIST] duplicate run directory exists: ${ROOT_OUT_DIR}" >&2
++  exit 1
++fi
+ bootstrap_gradle_cache
+ prepare_runtime
+ 
+diff --git a/scripts/loadtest/summarize-ingestion-metrics.sh b/scripts/loadtest/summarize-ingestion-metrics.sh
+new file mode 100644
+index 0000000..30a1eaa
+--- /dev/null
++++ b/scripts/loadtest/summarize-ingestion-metrics.sh
+@@ -0,0 +1,100 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++if [[ $# -lt 1 || $# -gt 2 ]]; then
++  echo "Usage: $0 <attempt_dir> [backend_log]" >&2
++  exit 1
++fi
++
++ATTEMPT_DIR="$1"
++if [[ ! -d "$ATTEMPT_DIR" ]]; then
++  echo "Attempt directory not found: $ATTEMPT_DIR" >&2
++  exit 1
++fi
++
++BACKEND_LOG="${2:-$ATTEMPT_DIR/backend.log}"
++if [[ ! -f "$BACKEND_LOG" ]]; then
++  echo "Backend log not found: $BACKEND_LOG" >&2
++  exit 1
++fi
++
++RUN_ID="$(basename "$(dirname "$ATTEMPT_DIR")")"
++ATTEMPT_NAME="$(basename "$ATTEMPT_DIR")"
++ATTEMPT="${ATTEMPT_NAME#attempt-}"
++SUMMARY_FILE="${ATTEMPT_DIR}/business-summary.json"
++
++METRICS_LINE="$(grep -E "\[INGEST-METRICS/1s\].*\|[[:space:]]*totals" "$BACKEND_LOG" | tail -n1 || true)"
++if [[ -z "$METRICS_LINE" ]]; then
++  echo "No [INGEST-METRICS/1s] totals line found in: $BACKEND_LOG" >&2
++  exit 1
++fi
++TOTALS_SEGMENT="$(echo "$METRICS_LINE" | sed -E 's/^.*\|[[:space:]]*totals[[:space:]]*//')"
++
++extract_total() {
++  local key="$1"
++  local segment="$2"
++  local value
++  value="$(
++    echo "$segment" \
++      | grep -oE "(^|[[:space:]])${key}[[:space:]]*=[[:space:]]*[^[:space:]]+" \
++      | tail -n1 \
++      | sed -E 's/^.*=[[:space:]]*//' || true
++  )"
++
++  if [[ -z "$value" || ! "$value" =~ ^[0-9]+$ ]]; then
++    return 1
++  fi
++
++  echo "$value"
++}
++
++if ! RECV_TOTAL="$(extract_total "recv" "$TOTALS_SEGMENT")" \
++  || ! PARSE_OK_TOTAL="$(extract_total "parseOk" "$TOTALS_SEGMENT")" \
++  || ! PARSE_FAIL_TOTAL="$(extract_total "parseFail" "$TOTALS_SEGMENT")" \
++  || ! INFLUX_OK_TOTAL="$(extract_total "influxOk" "$TOTALS_SEGMENT")" \
++  || ! INFLUX_FAIL_TOTAL="$(extract_total "influxFail" "$TOTALS_SEGMENT")" \
++  || ! REDIS_OK_TOTAL="$(extract_total "redisOk" "$TOTALS_SEGMENT")" \
++  || ! REDIS_FAIL_TOTAL="$(extract_total "redisFail" "$TOTALS_SEGMENT")"; then
++  echo "Failed to parse totals from backend log line: $METRICS_LINE" >&2
++  exit 1
++fi
++
++PIPELINE_SUCCESS_TOTAL="$PARSE_OK_TOTAL"
++if (( INFLUX_OK_TOTAL < PIPELINE_SUCCESS_TOTAL )); then
++  PIPELINE_SUCCESS_TOTAL="$INFLUX_OK_TOTAL"
++fi
++if (( REDIS_OK_TOTAL < PIPELINE_SUCCESS_TOTAL )); then
++  PIPELINE_SUCCESS_TOTAL="$REDIS_OK_TOTAL"
++fi
++
++PIPELINE_FAILURE_TOTAL=$(( RECV_TOTAL - PIPELINE_SUCCESS_TOTAL ))
++if (( PIPELINE_FAILURE_TOTAL < 0 )); then
++  PIPELINE_FAILURE_TOTAL=0
++fi
++
++PIPELINE_SUCCESS_RATE="$(awk -v ok="$PIPELINE_SUCCESS_TOTAL" -v recv="$RECV_TOTAL" 'BEGIN { if (recv == 0) { printf "0.0000" } else { printf "%.4f", ok / recv } }')"
++PIPELINE_SUCCESS_RATE_PCT="$(awk -v r="$PIPELINE_SUCCESS_RATE" 'BEGIN { printf "%.2f", r * 100 }')"
++
++cat > "$SUMMARY_FILE" <<EOF
++{
++  "run_id": "${RUN_ID}",
++  "attempt": "${ATTEMPT}",
++  "recv_total": ${RECV_TOTAL},
++  "parse_ok_total": ${PARSE_OK_TOTAL},
++  "parse_fail_total": ${PARSE_FAIL_TOTAL},
++  "influx_ok_total": ${INFLUX_OK_TOTAL},
++  "influx_fail_total": ${INFLUX_FAIL_TOTAL},
++  "redis_ok_total": ${REDIS_OK_TOTAL},
++  "redis_fail_total": ${REDIS_FAIL_TOTAL},
++  "pipeline_success_total": ${PIPELINE_SUCCESS_TOTAL},
++  "pipeline_failure_total": ${PIPELINE_FAILURE_TOTAL},
++  "pipeline_success_rate": ${PIPELINE_SUCCESS_RATE},
++  "pipeline_success_rate_pct": ${PIPELINE_SUCCESS_RATE_PCT},
++  "pipeline_success_formula": "min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total"
++}
++EOF
++
++echo "[DIST] business recv_total=${RECV_TOTAL}"
++echo "[DIST] business pipeline_success_total=${PIPELINE_SUCCESS_TOTAL}"
++echo "[DIST] business pipeline_success_rate=${PIPELINE_SUCCESS_RATE_PCT}%"
++echo "[DIST] business_summary=${SUMMARY_FILE}"
+diff --git a/scripts/loadtest/summarize-results.sh b/scripts/loadtest/summarize-results.sh
+index f31f59f..8830af1 100644
+--- a/scripts/loadtest/summarize-results.sh
++++ b/scripts/loadtest/summarize-results.sh
+@@ -12,6 +12,11 @@ if [[ ! -d "$RUN_DIR" ]]; then
+   exit 1
+ fi
+ 
++RUN_ID="$(basename "$(dirname "$RUN_DIR")")"
++ATTEMPT_NAME="$(basename "$RUN_DIR")"
++ATTEMPT="${ATTEMPT_NAME#attempt-}"
++SUMMARY_FILE="${RUN_DIR}/connection-summary.json"
++
+ PUBLISHED=0
+ FAILED=0
+ THROUGHPUT=0
+@@ -39,8 +44,29 @@ for LOG in "$RUN_DIR"/part-*.log; do
+ 
+ done
+ 
++ATTEMPTED=$(( PUBLISHED + FAILED ))
++SUCCESS_RATE="$(awk -v p="$PUBLISHED" -v t="$ATTEMPTED" 'BEGIN { if (t == 0) { printf "0.0000" } else { printf "%.4f", p / t } }')"
++SUCCESS_RATE_PCT="$(awk -v r="$SUCCESS_RATE" 'BEGIN { printf "%.2f", r * 100 }')"
++
++cat > "$SUMMARY_FILE" <<EOF
++{
++  "run_id": "${RUN_ID}",
++  "attempt": "${ATTEMPT}",
++  "parts": ${PARTS},
++  "published_total": ${PUBLISHED},
++  "failed_total": ${FAILED},
++  "attempted_total": ${ATTEMPTED},
++  "success_rate": ${SUCCESS_RATE},
++  "success_rate_pct": ${SUCCESS_RATE_PCT},
++  "throughput_total_msg_per_sec": ${THROUGHPUT},
++  "success_rate_formula": "published_total / (published_total + failed_total)"
++}
++EOF
++
+ echo "[DIST] parts=${PARTS}"
+ echo "[DIST] published_total=${PUBLISHED}"
+ echo "[DIST] failed_total=${FAILED}"
+ echo "[DIST] throughput_total(msg/sec)=${THROUGHPUT}"
++echo "[DIST] connection_success_rate=${SUCCESS_RATE_PCT}%"
+ echo "[DIST] logs_dir=${RUN_DIR}"
++echo "[DIST] connection_summary=${SUMMARY_FILE}"
+diff --git a/src/main/java/com/iot/IoT/ingestion/consumer/MqttConsumer.java b/src/main/java/com/iot/IoT/ingestion/consumer/MqttConsumer.java
+index 91a686d..1dbca40 100644
+--- a/src/main/java/com/iot/IoT/ingestion/consumer/MqttConsumer.java
++++ b/src/main/java/com/iot/IoT/ingestion/consumer/MqttConsumer.java
+@@ -2,6 +2,7 @@ package com.iot.IoT.ingestion.consumer;
+ 
+ import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
+ import com.iot.IoT.ingestion.exception.InvalidMqttPayloadException;
++import com.iot.IoT.ingestion.metrics.IngestionMetricsCollector;
+ import com.iot.IoT.ingestion.parser.MqttPayloadParser;
+ import com.iot.IoT.ingestion.service.DeviceIngestionService;
+ import org.slf4j.Logger;
+@@ -20,22 +21,27 @@ public class MqttConsumer {
+ 
+     private final MqttPayloadParser mqttPayloadParser;
+     private final DeviceIngestionService deviceIngestionService;
++    private final IngestionMetricsCollector ingestionMetricsCollector;
+ 
+     public MqttConsumer(
+             MqttPayloadParser mqttPayloadParser,
+-            DeviceIngestionService deviceIngestionService
++            DeviceIngestionService deviceIngestionService,
++            IngestionMetricsCollector ingestionMetricsCollector
+     ) {
+         this.mqttPayloadParser = mqttPayloadParser;
+         this.deviceIngestionService = deviceIngestionService;
++        this.ingestionMetricsCollector = ingestionMetricsCollector;
+     }
+ 
+     @ServiceActivator(inputChannel = "mqttInputChannel")
+     public void handle(Message<?> message) {
+         String topic = (String) message.getHeaders().get(MqttHeaders.RECEIVED_TOPIC);
+         String rawPayload = payloadAsString(message.getPayload());
++        ingestionMetricsCollector.recordMqttReceived();
+ 
+         try {
+             DeviceStatusMessage statusMessage = mqttPayloadParser.parseDeviceStatus(rawPayload);
++            ingestionMetricsCollector.recordParseSuccess();
+             log.info("[MQTT] Parsed device status. topic={}, deviceId={}, temp={}, targetTemp={}, state={}",
+                     topic,
+                     statusMessage.deviceId(),
+@@ -44,6 +50,7 @@ public class MqttConsumer {
+                     statusMessage.state());
+             deviceIngestionService.ingest(statusMessage);
+         } catch (InvalidMqttPayloadException ex) {
++            ingestionMetricsCollector.recordParseFailure();
+             log.warn("[MQTT] Invalid payload. topic={}, payload={}, reason={}",
+                     topic,
+                     rawPayload,
+diff --git a/src/main/java/com/iot/IoT/ingestion/metrics/IngestionMetricsCollector.java b/src/main/java/com/iot/IoT/ingestion/metrics/IngestionMetricsCollector.java
+new file mode 100644
+index 0000000..6cadf55
+--- /dev/null
++++ b/src/main/java/com/iot/IoT/ingestion/metrics/IngestionMetricsCollector.java
+@@ -0,0 +1,106 @@
++package com.iot.IoT.ingestion.metrics;
++
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
++import org.springframework.scheduling.annotation.Scheduled;
++import org.springframework.stereotype.Component;
++
++import java.util.concurrent.atomic.AtomicLong;
++import java.util.concurrent.atomic.LongAdder;
++
++@Component
++@ConditionalOnProperty(prefix = "ingestion.metrics", name = "enabled", havingValue = "true", matchIfMissing = true)
++public class IngestionMetricsCollector {
++
++    private static final Logger log = LoggerFactory.getLogger(IngestionMetricsCollector.class);
++
++    private final LongAdder mqttReceivedTotal = new LongAdder();
++    private final LongAdder parseSuccessTotal = new LongAdder();
++    private final LongAdder parseFailureTotal = new LongAdder();
++    private final LongAdder influxSuccessTotal = new LongAdder();
++    private final LongAdder influxFailureTotal = new LongAdder();
++    private final LongAdder redisSuccessTotal = new LongAdder();
++    private final LongAdder redisFailureTotal = new LongAdder();
++
++    private final AtomicLong lastMqttReceived = new AtomicLong(0);
++    private final AtomicLong lastParseSuccess = new AtomicLong(0);
++    private final AtomicLong lastParseFailure = new AtomicLong(0);
++    private final AtomicLong lastInfluxSuccess = new AtomicLong(0);
++    private final AtomicLong lastInfluxFailure = new AtomicLong(0);
++    private final AtomicLong lastRedisSuccess = new AtomicLong(0);
++    private final AtomicLong lastRedisFailure = new AtomicLong(0);
++
++    public void recordMqttReceived() {
++        mqttReceivedTotal.increment();
++    }
++
++    public void recordParseSuccess() {
++        parseSuccessTotal.increment();
++    }
++
++    public void recordParseFailure() {
++        parseFailureTotal.increment();
++    }
++
++    public void recordInfluxSuccess() {
++        influxSuccessTotal.increment();
++    }
++
++    public void recordInfluxFailure() {
++        influxFailureTotal.increment();
++    }
++
++    public void recordRedisSuccess() {
++        redisSuccessTotal.increment();
++    }
++
++    public void recordRedisFailure() {
++        redisFailureTotal.increment();
++    }
++
++    @Scheduled(fixedDelayString = "${ingestion.metrics-log-interval-ms:1000}")
++    public void logSnapshot() {
++        long mqttReceived = mqttReceivedTotal.sum();
++        long parseSuccess = parseSuccessTotal.sum();
++        long parseFailure = parseFailureTotal.sum();
++        long influxSuccess = influxSuccessTotal.sum();
++        long influxFailure = influxFailureTotal.sum();
++        long redisSuccess = redisSuccessTotal.sum();
++        long redisFailure = redisFailureTotal.sum();
++
++        long mqttReceivedDelta = mqttReceived - lastMqttReceived.getAndSet(mqttReceived);
++        long parseSuccessDelta = parseSuccess - lastParseSuccess.getAndSet(parseSuccess);
++        long parseFailureDelta = parseFailure - lastParseFailure.getAndSet(parseFailure);
++        long influxSuccessDelta = influxSuccess - lastInfluxSuccess.getAndSet(influxSuccess);
++        long influxFailureDelta = influxFailure - lastInfluxFailure.getAndSet(influxFailure);
++        long redisSuccessDelta = redisSuccess - lastRedisSuccess.getAndSet(redisSuccess);
++        long redisFailureDelta = redisFailure - lastRedisFailure.getAndSet(redisFailure);
++
++        if (mqttReceivedDelta == 0
++                && parseSuccessDelta == 0
++                && parseFailureDelta == 0
++                && influxSuccessDelta == 0
++                && influxFailureDelta == 0
++                && redisSuccessDelta == 0
++                && redisFailureDelta == 0) {
++            return;
++        }
++
++        log.info("[INGEST-METRICS/1s] recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, redisOk={}, redisFail={} | totals recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, redisOk={}, redisFail={}",
++                mqttReceivedDelta,
++                parseSuccessDelta,
++                parseFailureDelta,
++                influxSuccessDelta,
++                influxFailureDelta,
++                redisSuccessDelta,
++                redisFailureDelta,
++                mqttReceived,
++                parseSuccess,
++                parseFailure,
++                influxSuccess,
++                influxFailure,
++                redisSuccess,
++                redisFailure);
++    }
++}
+diff --git a/src/main/java/com/iot/IoT/ingestion/service/DeviceIngestionServiceImpl.java b/src/main/java/com/iot/IoT/ingestion/service/DeviceIngestionServiceImpl.java
+index a212138..7b9882a 100644
+--- a/src/main/java/com/iot/IoT/ingestion/service/DeviceIngestionServiceImpl.java
++++ b/src/main/java/com/iot/IoT/ingestion/service/DeviceIngestionServiceImpl.java
+@@ -3,6 +3,7 @@ package com.iot.IoT.ingestion.service;
+ import com.iot.IoT.control.ControlAction;
+ import com.iot.IoT.control.ControlDecisionEngine;
+ import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
++import com.iot.IoT.ingestion.metrics.IngestionMetricsCollector;
+ import com.iot.IoT.ingestion.port.HeartbeatPort;
+ import com.iot.IoT.ingestion.port.TemperatureTimeSeriesPort;
+ import org.slf4j.Logger;
+@@ -19,15 +20,18 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
+     private final TemperatureTimeSeriesPort temperatureTimeSeriesPort;
+     private final HeartbeatPort heartbeatPort;
+     private final ControlDecisionEngine controlDecisionEngine;
++    private final IngestionMetricsCollector ingestionMetricsCollector;
+ 
+     public DeviceIngestionServiceImpl(
+             TemperatureTimeSeriesPort temperatureTimeSeriesPort,
+             HeartbeatPort heartbeatPort,
+-            ControlDecisionEngine controlDecisionEngine
++            ControlDecisionEngine controlDecisionEngine,
++            IngestionMetricsCollector ingestionMetricsCollector
+     ) {
+         this.temperatureTimeSeriesPort = temperatureTimeSeriesPort;
+         this.heartbeatPort = heartbeatPort;
+         this.controlDecisionEngine = controlDecisionEngine;
++        this.ingestionMetricsCollector = ingestionMetricsCollector;
+     }
+ 
+     @Override
+@@ -36,7 +40,9 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
+ 
+         try {
+             temperatureTimeSeriesPort.save(message, now);
++            ingestionMetricsCollector.recordInfluxSuccess();
+         } catch (Exception e) {
++            ingestionMetricsCollector.recordInfluxFailure();
+             log.error("[INGESTION] Influx write failed. deviceId={}, temp={}, targetTemp={}, state={}",
+                     message.deviceId(),
+                     message.temp(),
+@@ -47,7 +53,9 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
+ 
+         try {
+             heartbeatPort.updateLastSeen(message.deviceId(), now);
++            ingestionMetricsCollector.recordRedisSuccess();
+         } catch (Exception e) {
++            ingestionMetricsCollector.recordRedisFailure();
+             log.error("[INGESTION] Redis heartbeat update failed. deviceId={}", message.deviceId(), e);
+         }
+ 
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+index e4f444a..385c837 100644
+--- a/src/main/resources/application.yml
++++ b/src/main/resources/application.yml
+@@ -39,6 +39,9 @@ influxdb:
+ 
+ ingestion:
+   heartbeat-ttl-seconds: 120
++  metrics:
++    enabled: true
++  metrics-log-interval-ms: 1000
+ control:
+   deadband: 0.3
+ watchdog:
+diff --git a/src/test/java/com/iot/IoT/ingestion/service/DeviceIngestionServiceImplTest.java b/src/test/java/com/iot/IoT/ingestion/service/DeviceIngestionServiceImplTest.java
+index e6c9eb8..7926848 100644
+--- a/src/test/java/com/iot/IoT/ingestion/service/DeviceIngestionServiceImplTest.java
++++ b/src/test/java/com/iot/IoT/ingestion/service/DeviceIngestionServiceImplTest.java
+@@ -3,6 +3,7 @@ package com.iot.IoT.ingestion.service;
+ import com.iot.IoT.control.ControlDecisionEngine;
+ import com.iot.IoT.ingestion.dto.DeviceState;
+ import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
++import com.iot.IoT.ingestion.metrics.IngestionMetricsCollector;
+ import com.iot.IoT.ingestion.port.HeartbeatPort;
+ import com.iot.IoT.ingestion.port.TemperatureTimeSeriesPort;
+ import org.junit.jupiter.api.BeforeEach;
+@@ -23,6 +24,7 @@ class DeviceIngestionServiceImplTest {
+     private TemperatureTimeSeriesPort temperatureTimeSeriesPort;
+     private HeartbeatPort heartbeatPort;
+     private ControlDecisionEngine controlDecisionEngine;
++    private IngestionMetricsCollector ingestionMetricsCollector;
+     private DeviceIngestionServiceImpl service;
+ 
+     @BeforeEach
+@@ -30,7 +32,13 @@ class DeviceIngestionServiceImplTest {
+         temperatureTimeSeriesPort = Mockito.mock(TemperatureTimeSeriesPort.class);
+         heartbeatPort = Mockito.mock(HeartbeatPort.class);
+         controlDecisionEngine = Mockito.mock(ControlDecisionEngine.class);
+-        service = new DeviceIngestionServiceImpl(temperatureTimeSeriesPort, heartbeatPort, controlDecisionEngine);
++        ingestionMetricsCollector = Mockito.mock(IngestionMetricsCollector.class);
++        service = new DeviceIngestionServiceImpl(
++                temperatureTimeSeriesPort,
++                heartbeatPort,
++                controlDecisionEngine,
++                ingestionMetricsCollector
++        );
+     }
+ 
+     @Test
+@@ -42,6 +50,10 @@ class DeviceIngestionServiceImplTest {
+ 
+         verify(temperatureTimeSeriesPort, times(1)).save(eq(message), any());
+         verify(heartbeatPort, times(1)).updateLastSeen(eq("SV-001"), any());
++        verify(ingestionMetricsCollector, times(1)).recordInfluxSuccess();
++        verify(ingestionMetricsCollector, times(0)).recordInfluxFailure();
++        verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
++        verify(ingestionMetricsCollector, times(0)).recordRedisFailure();
+     }
+ 
+     @Test
+@@ -54,6 +66,10 @@ class DeviceIngestionServiceImplTest {
+ 
+         verify(temperatureTimeSeriesPort, times(1)).save(eq(message), any());
+         verify(heartbeatPort, times(1)).updateLastSeen(eq("SV-001"), any());
++        verify(ingestionMetricsCollector, times(0)).recordInfluxSuccess();
++        verify(ingestionMetricsCollector, times(1)).recordInfluxFailure();
++        verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
++        verify(ingestionMetricsCollector, times(0)).recordRedisFailure();
+     }
+ 
+     @Test
+@@ -66,6 +82,10 @@ class DeviceIngestionServiceImplTest {
+ 
+         verify(temperatureTimeSeriesPort, times(1)).save(eq(message), any());
+         verify(heartbeatPort, times(1)).updateLastSeen(eq("SV-001"), any());
++        verify(ingestionMetricsCollector, times(1)).recordInfluxSuccess();
++        verify(ingestionMetricsCollector, times(0)).recordInfluxFailure();
++        verify(ingestionMetricsCollector, times(0)).recordRedisSuccess();
++        verify(ingestionMetricsCollector, times(1)).recordRedisFailure();
+     }
+ 
+     private DeviceStatusMessage sampleMessage() {
+diff --git a/tests/fixtures/loadtest/ingestion/happy/backend.log b/tests/fixtures/loadtest/ingestion/happy/backend.log
+new file mode 100644
+index 0000000..10d109c
+--- /dev/null
++++ b/tests/fixtures/loadtest/ingestion/happy/backend.log
+@@ -0,0 +1,2 @@
++2026-02-18 00:00:00 [INGEST-METRICS/1s] window recv=20 parseOk=20 parseFail=0 influxOk=18 influxFail=2 redisOk=17 redisFail=3 | totals recv=100 parseOk=95 parseFail=5 influxOk=90 influxFail=10 redisOk=85 redisFail=15
++2026-02-18 00:00:01 [INGEST-METRICS/1s] window recv=10 parseOk=10 parseFail=0 influxOk=9 influxFail=1 redisOk=9 redisFail=1 | totals recv=200 parseOk=190 parseFail=10 influxOk=180 influxFail=20 redisOk=170 redisFail=30
+diff --git a/tests/fixtures/loadtest/ingestion/malformed-totals/backend.log b/tests/fixtures/loadtest/ingestion/malformed-totals/backend.log
+new file mode 100644
+index 0000000..d5fe3f7
+--- /dev/null
++++ b/tests/fixtures/loadtest/ingestion/malformed-totals/backend.log
+@@ -0,0 +1 @@
++2026-02-18 00:00:00 [INGEST-METRICS/1s] window recv=10 parseOk=bad parseFail=0 influxOk=9 influxFail=1 redisOk=8 redisFail=2 | totals recv=100 parseOk=bad parseFail=5 influxOk=90 influxFail=10 redisOk=85 redisFail=15
+diff --git a/tests/fixtures/loadtest/ingestion/missing-required-totals-key/backend.log b/tests/fixtures/loadtest/ingestion/missing-required-totals-key/backend.log
+new file mode 100644
+index 0000000..2406d3d
+--- /dev/null
++++ b/tests/fixtures/loadtest/ingestion/missing-required-totals-key/backend.log
+@@ -0,0 +1 @@
++2026-02-18 00:00:00 [INGEST-METRICS/1s] window recv=40 parseOk=39 parseFail=1 influxOk=38 influxFail=2 redisOk=37 redisFail=3 | totals recv=400 parseFail=10 influxOk=380 influxFail=20 redisOk=370 redisFail=30
+diff --git a/tests/fixtures/loadtest/ingestion/missing-totals/backend.log b/tests/fixtures/loadtest/ingestion/missing-totals/backend.log
+new file mode 100644
+index 0000000..a86b3e8
+--- /dev/null
++++ b/tests/fixtures/loadtest/ingestion/missing-totals/backend.log
+@@ -0,0 +1 @@
++2026-02-18 00:00:00 [INGEST-METRICS/1s] window recv=10 parseOk=10 parseFail=0 influxOk=10 influxFail=0 redisOk=10 redisFail=0
+diff --git a/tests/fixtures/loadtest/ingestion/zero/backend.log b/tests/fixtures/loadtest/ingestion/zero/backend.log
+new file mode 100644
+index 0000000..12bd3de
+--- /dev/null
++++ b/tests/fixtures/loadtest/ingestion/zero/backend.log
+@@ -0,0 +1 @@
++2026-02-18 00:00:00 [INGEST-METRICS/1s] window recv=0 parseOk=0 parseFail=0 influxOk=0 influxFail=0 redisOk=0 redisFail=0 | totals recv=0 parseOk=0 parseFail=0 influxOk=0 influxFail=0 redisOk=0 redisFail=0
+diff --git a/tests/fixtures/loadtest/results/happy/part-1.log b/tests/fixtures/loadtest/results/happy/part-1.log
+new file mode 100644
+index 0000000..9d1cd7a
+--- /dev/null
++++ b/tests/fixtures/loadtest/results/happy/part-1.log
+@@ -0,0 +1,3 @@
++[SIM] published=10
++[SIM] failed=2
++[SIM] throughput(msg/sec)=3.50
+diff --git a/tests/fixtures/loadtest/results/happy/part-2.log b/tests/fixtures/loadtest/results/happy/part-2.log
+new file mode 100644
+index 0000000..3009ad1
+--- /dev/null
++++ b/tests/fixtures/loadtest/results/happy/part-2.log
+@@ -0,0 +1,6 @@
++[SIM-HIVE] published=5
++[SIM-HIVE] failed=5
++[SIM-HIVE] throughput(msg/sec)=1.00
++[SIM-HIVE] published=20
++[SIM-HIVE] failed=1
++[SIM-HIVE] throughput(msg/sec)=4.25
+diff --git a/tests/fixtures/loadtest/results/zero/part-1.log b/tests/fixtures/loadtest/results/zero/part-1.log
+new file mode 100644
+index 0000000..f39e0ac
+--- /dev/null
++++ b/tests/fixtures/loadtest/results/zero/part-1.log
+@@ -0,0 +1,2 @@
++[SIM] booting test worker
++[SIM] no summary lines generated
+diff --git a/tests/loadtest/test-summarizers.sh b/tests/loadtest/test-summarizers.sh
+new file mode 100644
+index 0000000..eb4a6a1
+--- /dev/null
++++ b/tests/loadtest/test-summarizers.sh
+@@ -0,0 +1,182 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
++FIXTURE_DIR="${ROOT_DIR}/tests/fixtures/loadtest"
++WORK_DIR="$(mktemp -d)"
++trap 'rm -rf "${WORK_DIR}"' EXIT
++
++fail() {
++  echo "[FAIL] $1" >&2
++  exit 1
++}
++
++assert_contains() {
++  local file="$1"
++  local needle="$2"
++  if ! grep -F -- "$needle" "$file" >/dev/null 2>&1; then
++    fail "expected '${needle}' in ${file}"
++  fi
++}
++
++prepare_attempt_dir() {
++  local run_id="$1"
++  local attempt="$2"
++  local attempt_dir="${WORK_DIR}/${run_id}/attempt-${attempt}"
++  mkdir -p "${attempt_dir}"
++  echo "${attempt_dir}"
++}
++
++run_test() {
++  local name="$1"
++  shift
++  "$@"
++  echo "[PASS] ${name}"
++}
++
++test_summarize_results_happy_path() {
++  local attempt_dir
++  attempt_dir="$(prepare_attempt_dir run-happy 1)"
++
++  cp "${FIXTURE_DIR}/results/happy/part-1.log" "${attempt_dir}/part-1.log"
++  cp "${FIXTURE_DIR}/results/happy/part-2.log" "${attempt_dir}/part-2.log"
++
++  "${ROOT_DIR}/scripts/loadtest/summarize-results.sh" "${attempt_dir}" >/dev/null
++
++  local summary="${attempt_dir}/connection-summary.json"
++  [[ -f "${summary}" ]] || fail "connection-summary.json was not created"
++
++  assert_contains "${summary}" '"run_id": "run-happy"'
++  assert_contains "${summary}" '"attempt": "1"'
++  assert_contains "${summary}" '"parts": 2'
++  assert_contains "${summary}" '"published_total": 30'
++  assert_contains "${summary}" '"failed_total": 3'
++  assert_contains "${summary}" '"attempted_total": 33'
++  assert_contains "${summary}" '"success_rate": 0.9091'
++  assert_contains "${summary}" '"success_rate_pct": 90.91'
++  assert_contains "${summary}" '"throughput_total_msg_per_sec": 7.75'
++  assert_contains "${summary}" '"success_rate_formula": "published_total / (published_total + failed_total)"'
++}
++
++test_summarize_results_zero_attempted_boundary() {
++  local attempt_dir
++  attempt_dir="$(prepare_attempt_dir run-zero 2)"
++
++  cp "${FIXTURE_DIR}/results/zero/part-1.log" "${attempt_dir}/part-1.log"
++
++  "${ROOT_DIR}/scripts/loadtest/summarize-results.sh" "${attempt_dir}" >/dev/null
++
++  local summary="${attempt_dir}/connection-summary.json"
++  [[ -f "${summary}" ]] || fail "connection-summary.json was not created for zero boundary"
++
++  assert_contains "${summary}" '"run_id": "run-zero"'
++  assert_contains "${summary}" '"attempt": "2"'
++  assert_contains "${summary}" '"parts": 1'
++  assert_contains "${summary}" '"published_total": 0'
++  assert_contains "${summary}" '"failed_total": 0'
++  assert_contains "${summary}" '"attempted_total": 0'
++  assert_contains "${summary}" '"success_rate": 0.0000'
++  assert_contains "${summary}" '"success_rate_pct": 0.00'
++  assert_contains "${summary}" '"throughput_total_msg_per_sec": 0'
++}
++
++test_summarize_ingestion_happy_path() {
++  local attempt_dir
++  attempt_dir="$(prepare_attempt_dir run-biz 3)"
++
++  cp "${FIXTURE_DIR}/ingestion/happy/backend.log" "${attempt_dir}/backend.log"
++
++  "${ROOT_DIR}/scripts/loadtest/summarize-ingestion-metrics.sh" "${attempt_dir}" >/dev/null
++
++  local summary="${attempt_dir}/business-summary.json"
++  [[ -f "${summary}" ]] || fail "business-summary.json was not created"
++
++  assert_contains "${summary}" '"run_id": "run-biz"'
++  assert_contains "${summary}" '"attempt": "3"'
++  assert_contains "${summary}" '"recv_total": 200'
++  assert_contains "${summary}" '"parse_ok_total": 190'
++  assert_contains "${summary}" '"parse_fail_total": 10'
++  assert_contains "${summary}" '"influx_ok_total": 180'
++  assert_contains "${summary}" '"influx_fail_total": 20'
++  assert_contains "${summary}" '"redis_ok_total": 170'
++  assert_contains "${summary}" '"redis_fail_total": 30'
++  assert_contains "${summary}" '"pipeline_success_total": 170'
++  assert_contains "${summary}" '"pipeline_failure_total": 30'
++  assert_contains "${summary}" '"pipeline_success_rate": 0.8500'
++  assert_contains "${summary}" '"pipeline_success_rate_pct": 85.00'
++  assert_contains "${summary}" '"pipeline_success_formula": "min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total"'
++}
++
++test_summarize_ingestion_zero_recv_boundary() {
++  local attempt_dir
++  attempt_dir="$(prepare_attempt_dir run-biz-zero 1)"
++
++  cp "${FIXTURE_DIR}/ingestion/zero/backend.log" "${attempt_dir}/backend.log"
++
++  "${ROOT_DIR}/scripts/loadtest/summarize-ingestion-metrics.sh" "${attempt_dir}" >/dev/null
++
++  local summary="${attempt_dir}/business-summary.json"
++  [[ -f "${summary}" ]] || fail "business-summary.json was not created for zero recv"
++
++  assert_contains "${summary}" '"recv_total": 0'
++  assert_contains "${summary}" '"pipeline_success_total": 0'
++  assert_contains "${summary}" '"pipeline_failure_total": 0'
++  assert_contains "${summary}" '"pipeline_success_rate": 0.0000'
++  assert_contains "${summary}" '"pipeline_success_rate_pct": 0.00'
++}
++
++test_summarize_ingestion_missing_totals_failure() {
++  local attempt_dir
++  attempt_dir="$(prepare_attempt_dir run-biz-fail 4)"
++
++  cp "${FIXTURE_DIR}/ingestion/missing-totals/backend.log" "${attempt_dir}/backend.log"
++
++  local stderr_file="${attempt_dir}/stderr.log"
++  if "${ROOT_DIR}/scripts/loadtest/summarize-ingestion-metrics.sh" "${attempt_dir}" >"${attempt_dir}/stdout.log" 2>"${stderr_file}"; then
++    fail "summarize-ingestion-metrics.sh should fail when totals line is missing"
++  fi
++
++  assert_contains "${stderr_file}" 'No [INGEST-METRICS/1s] totals line found'
++  [[ ! -f "${attempt_dir}/business-summary.json" ]] || fail "business-summary.json must not be created on parse failure"
++}
++
++test_summarize_ingestion_malformed_totals_failure() {
++  local attempt_dir
++  attempt_dir="$(prepare_attempt_dir run-biz-malformed 5)"
++
++  cp "${FIXTURE_DIR}/ingestion/malformed-totals/backend.log" "${attempt_dir}/backend.log"
++
++  local stderr_file="${attempt_dir}/stderr.log"
++  if "${ROOT_DIR}/scripts/loadtest/summarize-ingestion-metrics.sh" "${attempt_dir}" >"${attempt_dir}/stdout.log" 2>"${stderr_file}"; then
++    fail "summarize-ingestion-metrics.sh should fail when totals line is malformed"
++  fi
++
++  assert_contains "${stderr_file}" "Failed to parse totals from backend log line:"
++  [[ ! -f "${attempt_dir}/business-summary.json" ]] || fail "business-summary.json must not be created on parse failure"
++}
++
++test_summarize_ingestion_missing_required_totals_key_with_numeric_window_failure() {
++  local attempt_dir
++  attempt_dir="$(prepare_attempt_dir run-biz-missing-required-key 6)"
++
++  cp "${FIXTURE_DIR}/ingestion/missing-required-totals-key/backend.log" "${attempt_dir}/backend.log"
++
++  local stderr_file="${attempt_dir}/stderr.log"
++  if "${ROOT_DIR}/scripts/loadtest/summarize-ingestion-metrics.sh" "${attempt_dir}" >"${attempt_dir}/stdout.log" 2>"${stderr_file}"; then
++    fail "summarize-ingestion-metrics.sh should fail when totals segment is missing a required key"
++  fi
++
++  assert_contains "${stderr_file}" "Failed to parse totals from backend log line:"
++  [[ ! -f "${attempt_dir}/business-summary.json" ]] || fail "business-summary.json must not be created when totals key is missing"
++}
++
++run_test "summarize-results happy path" test_summarize_results_happy_path
++run_test "summarize-results zero attempted boundary" test_summarize_results_zero_attempted_boundary
++run_test "summarize-ingestion happy path" test_summarize_ingestion_happy_path
++run_test "summarize-ingestion zero recv boundary" test_summarize_ingestion_zero_recv_boundary
++run_test "summarize-ingestion missing totals failure" test_summarize_ingestion_missing_totals_failure
++run_test "summarize-ingestion malformed totals failure" test_summarize_ingestion_malformed_totals_failure
++run_test "summarize-ingestion missing required totals key with numeric window failure" test_summarize_ingestion_missing_required_totals_key_with_numeric_window_failure
++
++echo "All summarize script tests passed."
