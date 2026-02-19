@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Load Test Dashboard</title>
+  <style>
+    :root {
+      --bg-1: #f3f7ef;
+      --bg-2: #e7f0ff;
+      --ink: #1a1d16;
+      --muted: #5f6656;
+      --good: #1f8a42;
+      --warn: #b57f1b;
+      --bad: #b33a24;
+      --card: #fffdf8;
+      --line: #ced8c6;
+      --accent: #0f6a8f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Noto Sans KR", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 600px at 5% -20%, #d9f2d9 0%, transparent 60%),
+        radial-gradient(1200px 600px at 95% -10%, #d7e8ff 0%, transparent 60%),
+        linear-gradient(180deg, var(--bg-1), var(--bg-2));
+      min-height: 100vh;
+    }
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 24px 16px 36px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(24px, 3vw, 36px);
+      letter-spacing: 0.3px;
+    }
+    .sub {
+      margin: 0 0 20px;
+      color: var(--muted);
+    }
+    .uploader {
+      display: grid;
+      gap: 10px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 6px 22px rgba(20, 30, 20, 0.08);
+    }
+    .row {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .picker {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr 1fr auto auto;
+      align-items: end;
+    }
+    .picker label {
+      font-size: 13px;
+      color: #3f4c32;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 4px;
+    }
+    select, button, input[type="file"] {
+      width: 100%;
+      min-height: 38px;
+      border-radius: 10px;
+      border: 1px solid #b8c7af;
+      background: #fff;
+      padding: 6px 10px;
+      font: inherit;
+      color: inherit;
+    }
+    button {
+      cursor: pointer;
+      font-weight: 700;
+      background: #e9f2ea;
+    }
+    button:hover { filter: brightness(0.97); }
+    .filebox {
+      display: grid;
+      gap: 6px;
+      border: 1px dashed #a5b69b;
+      border-radius: 10px;
+      padding: 10px;
+      background: #f8fbf4;
+    }
+    .filebox label {
+      font-size: 13px;
+      color: #3f4c32;
+      font-weight: 600;
+    }
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .meta {
+      margin-top: 12px;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 6px 22px rgba(20, 30, 20, 0.08);
+    }
+    .card h3 {
+      margin: 0 0 4px;
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+    }
+    .value {
+      font-size: clamp(20px, 2.4vw, 30px);
+      font-weight: 700;
+    }
+    .meter {
+      margin-top: 8px;
+      height: 10px;
+      border-radius: 999px;
+      background: #e2eadb;
+      overflow: hidden;
+    }
+    .fill {
+      height: 100%;
+      width: 0;
+      transition: width 240ms ease-out;
+      background: linear-gradient(90deg, #2a7f5c, #2d9f8f);
+    }
+    .metrics {
+      margin-top: 12px;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .statline {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px dashed #d6dfce;
+      font-size: 14px;
+    }
+    .statline:last-child { border-bottom: 0; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .good { background: #dff4e4; color: var(--good); }
+    .warn { background: #fff4da; color: var(--warn); }
+    .bad { background: #fde5df; color: var(--bad); }
+    @media (max-width: 900px) {
+      .row, .meta, .metrics { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <h1>Load Test Visual Dashboard</h1>
+  <p class="sub">Drop or pick <code>connection-summary.json</code> and <code>business-summary.json</code> to inspect connection-level vs business-level health.</p>
+
+  <section class="uploader">
+    <div class="picker">
+      <div>
+        <label for="runPick">Run</label>
+        <select id="runPick">
+          <option value="">Select run...</option>
+        </select>
+      </div>
+      <div>
+        <label for="attemptPick">Attempt</label>
+        <select id="attemptPick">
+          <option value="">Select attempt...</option>
+        </select>
+      </div>
+      <button id="loadPickBtn" type="button">Load Selected</button>
+      <button id="refreshBtn" type="button">Refresh List</button>
+    </div>
+    <div class="row">
+      <div class="filebox">
+        <label for="connFile">Connection Summary JSON</label>
+        <input id="connFile" type="file" accept=".json,application/json">
+        <div class="hint">ex: <code>docs/loadtest-runs/&lt;run-id&gt;/attempt-1/connection-summary.json</code></div>
+      </div>
+      <div class="filebox">
+        <label for="bizFile">Business Summary JSON</label>
+        <input id="bizFile" type="file" accept=".json,application/json">
+        <div class="hint">ex: <code>docs/loadtest-runs/&lt;run-id&gt;/attempt-1/business-summary.json</code></div>
+      </div>
+    </div>
+    <div id="status" class="hint">Waiting for two summary files...</div>
+  </section>
+
+  <section class="meta">
+    <article class="card">
+      <h3>Run ID</h3>
+      <div id="runId" class="value">-</div>
+    </article>
+    <article class="card">
+      <h3>Attempt</h3>
+      <div id="attempt" class="value">-</div>
+    </article>
+    <article class="card">
+      <h3>Overall Grade</h3>
+      <div id="grade" class="value">-</div>
+    </article>
+  </section>
+
+  <section class="metrics">
+    <article class="card">
+      <h3>Connection Success</h3>
+      <div id="connRate" class="value">-</div>
+      <div class="meter"><div id="connFill" class="fill"></div></div>
+      <div class="statline"><span>Published</span><strong id="published">-</strong></div>
+      <div class="statline"><span>Failed</span><strong id="failed">-</strong></div>
+      <div class="statline"><span>Throughput</span><strong id="throughput">-</strong></div>
+    </article>
+
+    <article class="card">
+      <h3>Business Success</h3>
+      <div id="bizRate" class="value">-</div>
+      <div class="meter"><div id="bizFill" class="fill"></div></div>
+      <div class="statline"><span>Core Success</span><strong id="coreRate">-</strong></div>
+      <div class="statline"><span>recv_total</span><strong id="recvTotal">-</strong></div>
+      <div class="statline"><span>pipeline_success_total</span><strong id="pipelineTotal">-</strong></div>
+      <div class="statline"><span>core_pipeline_success_total</span><strong id="coreTotal">-</strong></div>
+    </article>
+
+    <article class="card">
+      <h3>Failure Counters</h3>
+      <div class="statline"><span>parse_fail_total</span><strong id="parseFail">-</strong></div>
+      <div class="statline"><span>influx_fail_total</span><strong id="influxFail">-</strong></div>
+      <div class="statline"><span>influx_bypass_total</span><strong id="influxBypass">-</strong></div>
+      <div class="statline"><span>redis_fail_total</span><strong id="redisFail">-</strong></div>
+    </article>
+
+    <article class="card">
+      <h3>SLO Snapshot</h3>
+      <div id="tagConn" class="tag">Connection: -</div>
+      <div id="tagBiz" class="tag" style="margin-top:8px;">Business(core): -</div>
+      <p class="hint" style="margin:12px 0 0;">
+        Connection target: <code>&ge; 99.90%</code><br>
+        Core business target: <code>&ge; 95.00%</code>
+      </p>
+    </article>
+  </section>
+</main>
+
+<script>
+  const state = { conn: null, biz: null, manifest: [] };
+  const $ = (id) => document.getElementById(id);
+
+  function asPct(v) {
+    if (v === undefined || v === null || Number.isNaN(Number(v))) return "-";
+    return Number(v).toFixed(2) + "%";
+  }
+
+  function readJson(file, key) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        state[key] = JSON.parse(reader.result);
+        render();
+      } catch (e) {
+        $("status").textContent = "Invalid JSON file: " + file.name;
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function scoreTag(ok) {
+    return ok ? { text: "PASS", cls: "good" } : { text: "FAIL", cls: "bad" };
+  }
+
+  function overallGrade(connPct, corePct, bizPct) {
+    if (connPct >= 99.9 && corePct >= 95 && bizPct >= 95) return { text: "PASS", cls: "good" };
+    if (connPct >= 99 && corePct >= 90 && bizPct >= 90) return { text: "WARN", cls: "warn" };
+    return { text: "FAIL", cls: "bad" };
+  }
+
+  function render() {
+    if (!state.conn || !state.biz) {
+      $("status").textContent = "Waiting for two summary files...";
+      return;
+    }
+
+    const c = state.conn;
+    const b = state.biz;
+    const connPct = Number(c.success_rate_pct ?? 0);
+    const bizPct = Number(b.pipeline_success_rate_pct ?? 0);
+    const corePct = Number(b.core_pipeline_success_rate_pct ?? 0);
+    const g = overallGrade(connPct, corePct, bizPct);
+
+    $("status").innerHTML = 'Loaded <strong>' + (c.run_id || "-") + "</strong>";
+    $("runId").textContent = c.run_id || "-";
+    $("attempt").textContent = c.attempt || "-";
+    $("grade").innerHTML = '<span class="tag ' + g.cls + '">' + g.text + "</span>";
+
+    $("connRate").textContent = asPct(connPct);
+    $("bizRate").textContent = asPct(bizPct);
+    $("coreRate").textContent = asPct(corePct);
+    $("connFill").style.width = Math.max(0, Math.min(connPct, 100)) + "%";
+    $("bizFill").style.width = Math.max(0, Math.min(corePct, 100)) + "%";
+
+    $("published").textContent = c.published_total ?? "-";
+    $("failed").textContent = c.failed_total ?? "-";
+    $("throughput").textContent = (c.throughput_total_msg_per_sec ?? "-") + " msg/s";
+
+    $("recvTotal").textContent = b.recv_total ?? "-";
+    $("pipelineTotal").textContent = b.pipeline_success_total ?? "-";
+    $("coreTotal").textContent = b.core_pipeline_success_total ?? "-";
+    $("parseFail").textContent = b.parse_fail_total ?? "-";
+    $("influxFail").textContent = b.influx_fail_total ?? "-";
+    $("influxBypass").textContent = b.influx_bypass_total ?? 0;
+    $("redisFail").textContent = b.redis_fail_total ?? "-";
+
+    $("tagConn").className = "tag " + (connPct >= 99.9 ? "good" : "bad");
+    $("tagConn").textContent = "Connection: " + (connPct >= 99.9 ? "PASS" : "FAIL");
+    const overallTag = scoreTag(bizPct >= 95);
+    $("tagBiz").className = "tag " + (corePct >= 95 ? "good" : "bad");
+    $("tagBiz").textContent = "Business(core): " + (corePct >= 95 ? "PASS" : "FAIL");
+    if (!$("tagOverall")) {
+      const n = document.createElement("div");
+      n.id = "tagOverall";
+      n.style.marginTop = "8px";
+      $("tagBiz").insertAdjacentElement("afterend", n);
+    }
+    $("tagOverall").className = "tag " + overallTag.cls;
+    $("tagOverall").textContent = "Business(overall): " + overallTag.text;
+  }
+
+  function loadPickers() {
+    const runSelect = $("runPick");
+    const attemptSelect = $("attemptPick");
+    const currentRun = runSelect.value;
+    const currentAttempt = attemptSelect.value;
+
+    const runIds = [...new Set(state.manifest.map((e) => e.run_id))];
+    runSelect.innerHTML = '<option value="">Select run...</option>' +
+      runIds.map((r) => `<option value="${r}">${r}</option>`).join("");
+    if (runIds.includes(currentRun)) runSelect.value = currentRun;
+
+    const filtered = state.manifest.filter((e) => e.run_id === runSelect.value);
+    attemptSelect.innerHTML = '<option value="">Select attempt...</option>' +
+      filtered.map((e) => `<option value="${e.attempt}">attempt-${e.attempt}</option>`).join("");
+    if (filtered.some((e) => e.attempt === currentAttempt)) attemptSelect.value = currentAttempt;
+  }
+
+  async function loadManifest() {
+    try {
+      const res = await fetch("./loadtest-runs/manifest.json", { cache: "no-store" });
+      if (!res.ok) throw new Error("manifest not found");
+      const data = await res.json();
+      state.manifest = Array.isArray(data.entries) ? data.entries : [];
+      loadPickers();
+      $("status").textContent = state.manifest.length
+        ? `Manifest loaded (${state.manifest.length} entries).`
+        : "Manifest loaded but empty.";
+    } catch (e) {
+      state.manifest = [];
+      loadPickers();
+      $("status").textContent = "Manifest unavailable. Use file upload or run scripts/loadtest/generate-dashboard-manifest.sh";
+    }
+  }
+
+  async function loadSelected() {
+    const runId = $("runPick").value;
+    const attempt = $("attemptPick").value;
+    if (!runId || !attempt) {
+      $("status").textContent = "Select run and attempt first.";
+      return;
+    }
+    const entry = state.manifest.find((e) => e.run_id === runId && e.attempt === attempt);
+    if (!entry) {
+      $("status").textContent = "Selected entry not found in manifest.";
+      return;
+    }
+    try {
+      const [connRes, bizRes] = await Promise.all([
+        fetch("./" + entry.connection_path.replace(/^docs\//, "")),
+        fetch("./" + entry.business_path.replace(/^docs\//, ""))
+      ]);
+      if (!connRes.ok || !bizRes.ok) throw new Error("failed to load summary files");
+      state.conn = await connRes.json();
+      state.biz = await bizRes.json();
+      render();
+    } catch (e) {
+      $("status").textContent = "Failed to load selected run files. Ensure dashboard is served from repo root or docs path.";
+    }
+  }
+
+  $("connFile").addEventListener("change", (e) => {
+    if (e.target.files[0]) readJson(e.target.files[0], "conn");
+  });
+  $("bizFile").addEventListener("change", (e) => {
+    if (e.target.files[0]) readJson(e.target.files[0], "biz");
+  });
+  $("runPick").addEventListener("change", loadPickers);
+  $("refreshBtn").addEventListener("click", loadManifest);
+  $("loadPickBtn").addEventListener("click", loadSelected);
+
+  loadManifest();
+</script>
+</body>
+</html>

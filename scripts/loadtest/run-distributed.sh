@@ -175,6 +175,7 @@ run_once() {
 
 ROOT_RUN_ID="$RUN_ID"
 ROOT_OUT_DIR="docs/loadtest-runs/${ROOT_RUN_ID}"
+DASH_MANIFEST_SCRIPT="$ROOT_DIR/scripts/loadtest/generate-dashboard-manifest.sh"
 echo "[DIST] run_id=${ROOT_RUN_ID}"
 echo "[DIST] run_root=${ROOT_OUT_DIR}"
 if ! mkdir -p "$(dirname "$ROOT_OUT_DIR")"; then
@@ -197,6 +198,9 @@ while (( attempt <= MAX_ATTEMPTS )); do
   echo "[DIST] attempt=${attempt}/${MAX_ATTEMPTS} task=${SIM_TASK} partitions=${current_partitions} parallelism=${current_parallelism}"
 
   if run_once "$attempt_dir" "$current_partitions" "$current_parallelism"; then
+    if [[ -x "$DASH_MANIFEST_SCRIPT" ]]; then
+      "$DASH_MANIFEST_SCRIPT" || echo "[DIST] dashboard manifest refresh failed" >&2
+    fi
     echo "[DIST] completed run_id=${ROOT_RUN_ID} attempt=${attempt}"
     echo "[DIST] logs_dir=${attempt_dir}"
     exit 0

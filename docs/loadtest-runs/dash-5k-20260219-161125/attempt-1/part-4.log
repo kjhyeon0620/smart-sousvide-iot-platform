@@ -1,0 +1,13 @@
+[SIM-HIVE] starting with config=SimulatorConfig[brokerUrl=tcp://localhost:1883, topicTemplate=sousvide/%s/status, connections=1000, startIndex=4000, connectParallelism=120, messagesPerSecond=1, durationSeconds=30, qos=1, clientPrefix=sim-p4, baseTemp=60.0, targetTemp=65.0]
+[SIM-HIVE] connected 200/1000 clients
+[SIM-HIVE] connected 400/1000 clients
+[SIM-HIVE] connected 600/1000 clients
+[SIM-HIVE] connected 800/1000 clients
+[SIM-HIVE] connected 1000/1000 clients
+[SIM-HIVE] finished
+[SIM-HIVE] durationSec=30.0
+[SIM-HIVE] wallDurationSec=39.764
+[SIM-HIVE] published=29000
+[SIM-HIVE] failed=0
+[SIM-HIVE] throughput(msg/sec)=966.67
+[SIM-HIVE] throughputWall(msg/sec)=729.30
