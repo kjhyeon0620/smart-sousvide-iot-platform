@@ -157,6 +157,9 @@ Use the same split-table schema above for PR2 rows, with `Influx Bypass` and `Bu
 
 ## Visual Dashboard (MVP)
 - Open `docs/loadtest-dashboard.html` in a browser.
+- Build run list manifest first:
+  - `./scripts/loadtest/generate-dashboard-manifest.sh`
+- Then select `run` + `attempt` from dropdown and click `Load Selected`.
 - Upload two files from the same run attempt:
   - `docs/loadtest-runs/<run-id>/attempt-<n>/connection-summary.json`
   - `docs/loadtest-runs/<run-id>/attempt-<n>/business-summary.json`
