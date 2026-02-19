@@ -39,6 +39,8 @@ influxdb:
 
 ingestion:
   heartbeat-ttl-seconds: 120
+  influx:
+    write-mode: strict
   metrics:
     enabled: true
   metrics-log-interval-ms: 1000

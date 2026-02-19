@@ -139,6 +139,18 @@ Source artifacts:
 - `docs/loadtest-runs/<run-id>/attempt-<n>/connection-summary.json`
 - `docs/loadtest-runs/<run-id>/attempt-<n>/business-summary.json`
 
-| Run ID | Attempt | Command | Connection Published | Connection Failed | Connection Success(%) | Connection Throughput(msg/s) | Business recv | Business pipeline success | Business Success(%) | Parse Fail | Influx Fail | Redis Fail | Notes |
-|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| `<run-id>` | `<n>` | `SIM_TASK=mqttLoadTestHive RUN_ID=<run-id> ... ./scripts/loadtest/run-distributed.sh 5000 5 120 1 60 1` | `<published_total>` | `<failed_total>` | `<success_rate_pct>` | `<throughput_total_msg_per_sec>` | `<recv_total>` | `<pipeline_success_total>` | `<pipeline_success_rate_pct>` | `<parse_fail_total>` | `<influx_fail_total>` | `<redis_fail_total>` | `PR1` |
+| Run ID | Attempt | Command | Connection Published | Connection Failed | Connection Success(%) | Connection Throughput(msg/s) | Business recv | Business overall pipeline success | Business overall Success(%) | Business core pipeline success | Business core Success(%) | Parse Fail | Influx Fail | Influx Bypass | Redis Fail | Notes |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| `pr1-5k-20260219-113748` | `1` | `SIM_TASK=mqttLoadTestHive RUN_ID=pr1-5k-20260219-113748 MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=540 ./scripts/loadtest/run-distributed.sh 5000 5 120 1 60 1` | `305000` | `0` | `100.00` | `5083.35` | `680` | `0` | `0.00` | `0` | `0.00` | `0` | `680` | `0` | `0` | `PR1 measured (strict mode, Influx write path failed)` |
+
+Formulas:
+- overall pipeline success = `min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total`
+- core pipeline success = `min(parse_ok_total, redis_ok_total) / recv_total`
+
+## Phase F PR2 Runbook (HiveMQ 10k, bypass mode)
+```bash
+# Backend must run with ingestion.influx.write-mode=bypass
+SIM_TASK=mqttLoadTestHive RUN_ID="pr2-hive-10k-$(date +%Y%m%d-%H%M%S)" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=780 REQUIRE_BUSINESS_SUMMARY=1 ./scripts/loadtest/run-distributed.sh 10000 8 120 1 60 1
+```
+
+Use the same split-table schema above for PR2 rows, with `Influx Bypass` and `Business core pipeline success` as required columns.

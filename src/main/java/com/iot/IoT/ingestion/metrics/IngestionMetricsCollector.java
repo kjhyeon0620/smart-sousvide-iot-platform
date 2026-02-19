@@ -20,6 +20,7 @@ public class IngestionMetricsCollector {
     private final LongAdder parseFailureTotal = new LongAdder();
     private final LongAdder influxSuccessTotal = new LongAdder();
     private final LongAdder influxFailureTotal = new LongAdder();
+    private final LongAdder influxBypassTotal = new LongAdder();
     private final LongAdder redisSuccessTotal = new LongAdder();
     private final LongAdder redisFailureTotal = new LongAdder();
 
@@ -28,6 +29,7 @@ public class IngestionMetricsCollector {
     private final AtomicLong lastParseFailure = new AtomicLong(0);
     private final AtomicLong lastInfluxSuccess = new AtomicLong(0);
     private final AtomicLong lastInfluxFailure = new AtomicLong(0);
+    private final AtomicLong lastInfluxBypass = new AtomicLong(0);
     private final AtomicLong lastRedisSuccess = new AtomicLong(0);
     private final AtomicLong lastRedisFailure = new AtomicLong(0);
 
@@ -51,6 +53,10 @@ public class IngestionMetricsCollector {
         influxFailureTotal.increment();
     }
 
+    public void recordInfluxBypass() {
+        influxBypassTotal.increment();
+    }
+
     public void recordRedisSuccess() {
         redisSuccessTotal.increment();
     }
@@ -66,6 +72,7 @@ public class IngestionMetricsCollector {
         long parseFailure = parseFailureTotal.sum();
         long influxSuccess = influxSuccessTotal.sum();
         long influxFailure = influxFailureTotal.sum();
+        long influxBypass = influxBypassTotal.sum();
         long redisSuccess = redisSuccessTotal.sum();
         long redisFailure = redisFailureTotal.sum();
 
@@ -74,6 +81,7 @@ public class IngestionMetricsCollector {
         long parseFailureDelta = parseFailure - lastParseFailure.getAndSet(parseFailure);
         long influxSuccessDelta = influxSuccess - lastInfluxSuccess.getAndSet(influxSuccess);
         long influxFailureDelta = influxFailure - lastInfluxFailure.getAndSet(influxFailure);
+        long influxBypassDelta = influxBypass - lastInfluxBypass.getAndSet(influxBypass);
         long redisSuccessDelta = redisSuccess - lastRedisSuccess.getAndSet(redisSuccess);
         long redisFailureDelta = redisFailure - lastRedisFailure.getAndSet(redisFailure);
 
@@ -82,17 +90,19 @@ public class IngestionMetricsCollector {
                 && parseFailureDelta == 0
                 && influxSuccessDelta == 0
                 && influxFailureDelta == 0
+                && influxBypassDelta == 0
                 && redisSuccessDelta == 0
                 && redisFailureDelta == 0) {
             return;
         }
 
-        log.info("[INGEST-METRICS/1s] recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, redisOk={}, redisFail={} | totals recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, redisOk={}, redisFail={}",
+        log.info("[INGEST-METRICS/1s] recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, influxBypass={}, redisOk={}, redisFail={} | totals recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, influxBypass={}, redisOk={}, redisFail={}",
                 mqttReceivedDelta,
                 parseSuccessDelta,
                 parseFailureDelta,
                 influxSuccessDelta,
                 influxFailureDelta,
+                influxBypassDelta,
                 redisSuccessDelta,
                 redisFailureDelta,
                 mqttReceived,
@@ -100,6 +110,7 @@ public class IngestionMetricsCollector {
                 parseFailure,
                 influxSuccess,
                 influxFailure,
+                influxBypass,
                 redisSuccess,
                 redisFailure);
     }
