@@ -1,0 +1,11 @@
+{
+  "generated_at": "2026-02-19T16:15:40+0900",
+  "entries": [
+    {
+      "run_id": "dash-5k-20260219-161125",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/dash-5k-20260219-161125/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/dash-5k-20260219-161125/attempt-1/business-summary.json"
+    }
+  ]
+}

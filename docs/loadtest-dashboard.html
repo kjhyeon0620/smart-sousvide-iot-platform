@@ -285,9 +285,13 @@
     reader.readAsText(file);
   }
 
-  function grade(connPct, corePct) {
-    if (connPct >= 99.9 && corePct >= 95) return { text: "PASS", cls: "good" };
-    if (connPct >= 99 && corePct >= 90) return { text: "WARN", cls: "warn" };
+  function scoreTag(ok) {
+    return ok ? { text: "PASS", cls: "good" } : { text: "FAIL", cls: "bad" };
+  }
+
+  function overallGrade(connPct, corePct, bizPct) {
+    if (connPct >= 99.9 && corePct >= 95 && bizPct >= 95) return { text: "PASS", cls: "good" };
+    if (connPct >= 99 && corePct >= 90 && bizPct >= 90) return { text: "WARN", cls: "warn" };
     return { text: "FAIL", cls: "bad" };
   }
 
@@ -302,7 +306,7 @@
     const connPct = Number(c.success_rate_pct ?? 0);
     const bizPct = Number(b.pipeline_success_rate_pct ?? 0);
     const corePct = Number(b.core_pipeline_success_rate_pct ?? 0);
-    const g = grade(connPct, corePct);
+    const g = overallGrade(connPct, corePct, bizPct);
 
     $("status").innerHTML = 'Loaded <strong>' + (c.run_id || "-") + "</strong>";
     $("runId").textContent = c.run_id || "-";
@@ -329,8 +333,17 @@
 
     $("tagConn").className = "tag " + (connPct >= 99.9 ? "good" : "bad");
     $("tagConn").textContent = "Connection: " + (connPct >= 99.9 ? "PASS" : "FAIL");
+    const overallTag = scoreTag(bizPct >= 95);
     $("tagBiz").className = "tag " + (corePct >= 95 ? "good" : "bad");
     $("tagBiz").textContent = "Business(core): " + (corePct >= 95 ? "PASS" : "FAIL");
+    if (!$("tagOverall")) {
+      const n = document.createElement("div");
+      n.id = "tagOverall";
+      n.style.marginTop = "8px";
+      $("tagBiz").insertAdjacentElement("afterend", n);
+    }
+    $("tagOverall").className = "tag " + overallTag.cls;
+    $("tagOverall").textContent = "Business(overall): " + overallTag.text;
   }
 
   function loadPickers() {

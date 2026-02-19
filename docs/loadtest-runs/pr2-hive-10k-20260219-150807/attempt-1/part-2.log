@@ -1,0 +1,9 @@
+[SIM-HIVE] starting with config=SimulatorConfig[brokerUrl=tcp://localhost:1883, topicTemplate=sousvide/%s/status, connections=1250, startIndex=2500, connectParallelism=120, messagesPerSecond=1, durationSeconds=60, qos=1, clientPrefix=sim-p2, baseTemp=60.0, targetTemp=65.0]
+[SIM-HIVE] connected 200/1250 clients
+[SIM-HIVE] connected 400/1250 clients
+[SIM-HIVE] connected 600/1250 clients
+[SIM-HIVE] connected 800/1250 clients
+[SIM-HIVE] connected 1000/1250 clients
+[SIM-HIVE] connected 1200/1250 clients
+Exception in thread "main" java.lang.IllegalStateException: Failed to connect clients: 42
+	at com.iot.IoT.loadtest.MqttLoadSimulatorHive.main(MqttLoadSimulatorHive.java:76)
