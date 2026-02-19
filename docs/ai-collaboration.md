@@ -44,6 +44,22 @@
 4. 핵심 코드 (Key Code): 해결의 열쇠가 되는 핵심 로직 발췌
 5. 배운 점 (Lesson): 기술적 인사이트, 트레이드오프, 주의사항
 
+## Task-Level Blog Fact Output (Mandatory)
+- Codex는 이슈 완료 시점뿐 아니라, 사용자가 요청한 **각 작업 단위 종료 시점**에도 블로그용 팩트 리포트를 기본으로 제공한다.
+- 사용자가 명시적으로 생략을 요청한 경우에만 생략 가능하다.
+- 출력 형식은 항상 `Context/Problem/Solution/Key Code/Lesson` 5개 섹션을 유지한다.
+- 분량 하한:
+1. Context: 1~2문장
+2. Problem: 최소 2개 이상 구체 상황(에러/비효율) 명시
+3. Solution: 의사결정 근거 포함 3문장 이상
+4. Key Code: 핵심 로직 코드 블록 1개 이상
+5. Lesson: 일반화 가능한 인사이트 2개 이상
+
+## Auto vs On-Demand Rule
+- Codex는 사용자의 별도 요청이 없어도 작업 종료 시 위 리포트를 자동 제공한다.
+- 사용자가 동일 템플릿을 다시 요청하면, 자동 응답과 동일 밀도 이상으로 재작성한다.
+- 자동 응답이 요약본으로 축약되지 않도록, 최소한 변경 파일/실패 원인/검증 결과를 포함한다.
+
 ## Issue Completion Response Bundle
 - 이슈 종료 시 Codex 응답은 아래 4가지를 항상 한 번에 제공한다.
 1. 작업 결과 상세 보고 (What/How/Why/Risk/Test)

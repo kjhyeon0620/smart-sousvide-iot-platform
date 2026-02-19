@@ -1,0 +1,45 @@
+﻿# === Enable multi-agent ===
+[features]
+multi_agent = true
+
+# === Multi-agent roles ===
+[agents]
+# Recommended concurrent agents:
+# - Start at 4~6 for most repos.
+# - Increase gradually only when file-level conflicts and rework stay low.
+max_threads = 5
+
+# 1) Leader (orchestrator)
+[agents.leader]
+description = "Orchestrator only. Must not edit code or run risky commands. Delegates to other agents and summarizes."
+config_file = "agents/leader.toml"
+
+# 2) Spec clarifier
+[agents.spec]
+description = "Clarifies requirements into acceptance criteria and task breakdown for PR-sized work items."
+config_file = "agents/spec.toml"
+
+# 3) Implementer
+[agents.implementer]
+description = "Implements changes in codebase. Writes minimal, clean code and keeps diffs small."
+config_file = "agents/implementer.toml"
+
+# 4) Tester
+[agents.tester]
+description = "Adds/updates tests, covers edge cases, reduces flakiness, and validates behavior."
+config_file = "agents/tester.toml"
+
+# 5) Reviewer
+[agents.reviewer]
+description = "Reviews for correctness, maintainability, security pitfalls, and missing tests. Suggests concrete fixes."
+config_file = "agents/reviewer.toml"
+
+# 6) GitHub operator
+[agents.github]
+description = "Handles git/GitHub workflow: issues/branches/commits/push/PR creation using existing templates."
+config_file = "agents/github.toml"
+
+# 7) Blog facts extractor
+[agents.blog_facts]
+description = "Given a git diff or code, extracts factual blog notes in Problem-Solving structure (Context/Problem/Solution/Key Code/Lesson)."
+config_file = "agents/blog_facts.toml"
