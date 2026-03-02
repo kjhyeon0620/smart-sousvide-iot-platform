@@ -42,3 +42,14 @@ curl -s http://localhost:8080/actuator/prometheus | rg "^iot\\."
 ## Common Tags
 - `application`: `${spring.application.name}`
 - `env`: `${APP_ENV:local}`
+
+## Grafana (Phase 7)
+- Dashboard JSON:
+  - `docs/grafana-observability-dashboard.json`
+- Runbook:
+  - `docs/operations-runbook.md`
+
+## Quick Import
+1. Grafana > Dashboards > Import
+2. `docs/grafana-observability-dashboard.json` 업로드
+3. datasource 변수(`DS_PROMETHEUS`)를 Prometheus에 매핑

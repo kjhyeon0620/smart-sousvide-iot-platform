@@ -1,0 +1,377 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(iot_ingestion_mqtt_received_total[1m])",
+          "legendFormat": "mqtt recv/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(iot_ingestion_parse_success_total[1m])",
+          "legendFormat": "parse ok/s",
+          "refId": "B"
+        }
+      ],
+      "title": "Ingestion Throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(iot_ingestion_parse_failure_total[5m])) / clamp_min(sum(rate(iot_ingestion_parse_success_total[5m]) + rate(iot_ingestion_parse_failure_total[5m])), 1e-9)",
+          "legendFormat": "parse failure ratio",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(iot_ingestion_influx_failure_total[5m])) / clamp_min(sum(rate(iot_ingestion_influx_success_total[5m]) + rate(iot_ingestion_influx_failure_total[5m])), 1e-9)",
+          "legendFormat": "influx failure ratio",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(iot_ingestion_redis_failure_total[5m])) / clamp_min(sum(rate(iot_ingestion_redis_success_total[5m]) + rate(iot_ingestion_redis_failure_total[5m])), 1e-9)",
+          "legendFormat": "redis failure ratio",
+          "refId": "C"
+        }
+      ],
+      "title": "Ingestion Failure Ratios",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(iot_downlink_command_sent_total[1m])",
+          "legendFormat": "sent/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(iot_downlink_command_acked_total[1m])",
+          "legendFormat": "acked/s",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(iot_downlink_command_expired_total[1m])",
+          "legendFormat": "expired/s",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(iot_downlink_command_failed_total[1m])",
+          "legendFormat": "failed/s",
+          "refId": "D"
+        },
+        {
+          "expr": "rate(iot_downlink_command_retried_total[1m])",
+          "legendFormat": "retried/s",
+          "refId": "E"
+        }
+      ],
+      "title": "Downlink Command Events",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(iot_downlink_command_acked_total[5m])) / clamp_min(sum(rate(iot_downlink_command_sent_total[5m])), 1e-9)",
+          "legendFormat": "acked ratio",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(iot_downlink_command_expired_total[5m])) / clamp_min(sum(rate(iot_downlink_command_sent_total[5m])), 1e-9)",
+          "legendFormat": "timeout ratio",
+          "refId": "B"
+        }
+      ],
+      "title": "Downlink Reliability Ratios",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{area=\"heap\"})",
+          "legendFormat": "heap used",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(jvm_memory_max_bytes{area=\"heap\"})",
+          "legendFormat": "heap max",
+          "refId": "B"
+        }
+      ],
+      "title": "JVM Heap Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "process_cpu_usage",
+          "legendFormat": "cpu usage",
+          "refId": "A"
+        },
+        {
+          "expr": "jvm_threads_live_threads",
+          "legendFormat": "live threads",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(http_server_requests_seconds_count[1m])",
+          "legendFormat": "http req/s",
+          "refId": "C"
+        }
+      ],
+      "title": "System Runtime Overview",
+      "type": "timeseries"
+    }
+  ],
+  "preload": false,
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [
+    "iot",
+    "observability",
+    "phase-7"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "Prometheus",
+          "value": "Prometheus"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "multi": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "IoT Observability Overview (Phase 7)",
+  "version": 1,
+  "weekStart": ""
+}
