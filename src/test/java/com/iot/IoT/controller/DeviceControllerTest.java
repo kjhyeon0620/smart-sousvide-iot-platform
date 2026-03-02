@@ -3,9 +3,14 @@ package com.iot.IoT.controller;
 import com.iot.IoT.dto.CreateDeviceRequest;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
+import com.iot.IoT.dto.DeviceStatusResponse;
+import com.iot.IoT.dto.DeviceTemperaturePointResponse;
+import com.iot.IoT.dto.DeviceTemperatureSeriesResponse;
+import com.iot.IoT.ingestion.dto.DeviceState;
 import com.iot.IoT.service.DeviceService;
 import com.iot.IoT.service.exception.DeviceNotFoundException;
 import com.iot.IoT.service.exception.DuplicateDeviceException;
+import com.iot.IoT.service.exception.InvalidDeviceQueryException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +24,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -134,6 +140,71 @@ class DeviceControllerTest {
         mockMvc.perform(patch("/devices/1/enabled")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("GET /devices/{id}/status should return composed status")
+    void getStatus_success() throws Exception {
+        DeviceStatusResponse response = new DeviceStatusResponse(
+                1L,
+                "SV-001",
+                "bath-1",
+                true,
+                Instant.parse("2026-03-02T00:00:00Z"),
+                true,
+                java.math.BigDecimal.valueOf(60.1),
+                java.math.BigDecimal.valueOf(65.0),
+                DeviceState.HEATING,
+                Instant.parse("2026-03-02T00:00:00Z")
+        );
+        when(deviceService.getStatus(1L)).thenReturn(response);
+
+        mockMvc.perform(get("/devices/1/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deviceId").value("SV-001"))
+                .andExpect(jsonPath("$.online").value(true))
+                .andExpect(jsonPath("$.latestState").value("HEATING"));
+    }
+
+    @Test
+    @DisplayName("GET /devices/{id}/temps should return series")
+    void getTemps_success() throws Exception {
+        DeviceTemperatureSeriesResponse response = new DeviceTemperatureSeriesResponse(
+                1L,
+                "SV-001",
+                Instant.parse("2026-03-02T00:00:00Z"),
+                Instant.parse("2026-03-02T00:10:00Z"),
+                100,
+                List.of(
+                        new DeviceTemperaturePointResponse(
+                                Instant.parse("2026-03-02T00:00:30Z"),
+                                java.math.BigDecimal.valueOf(60.2),
+                                java.math.BigDecimal.valueOf(65.0),
+                                DeviceState.HEATING
+                        )
+                )
+        );
+        when(deviceService.getTemperatures(eq(1L), any(Instant.class), any(Instant.class), eq(100)))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/devices/1/temps")
+                        .param("from", "2026-03-02T00:00:00Z")
+                        .param("to", "2026-03-02T00:10:00Z")
+                        .param("limit", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].temp").value(60.2))
+                .andExpect(jsonPath("$.items[0].state").value("HEATING"));
+    }
+
+    @Test
+    @DisplayName("GET /devices/{id}/temps should return 400 for invalid query")
+    void getTemps_invalidRequest() throws Exception {
+        when(deviceService.getTemperatures(eq(1L), isNull(), isNull(), eq(0)))
+                .thenThrow(new InvalidDeviceQueryException("from must be before or equal to to"));
+
+        mockMvc.perform(get("/devices/1/temps"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }

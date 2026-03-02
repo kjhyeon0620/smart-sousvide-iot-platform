@@ -3,12 +3,15 @@ package com.iot.IoT.controller;
 import com.iot.IoT.dto.CreateDeviceRequest;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
+import com.iot.IoT.dto.DeviceStatusResponse;
+import com.iot.IoT.dto.DeviceTemperatureSeriesResponse;
 import com.iot.IoT.dto.UpdateDeviceEnabledRequest;
 import com.iot.IoT.service.DeviceService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.time.Instant;
 
 @RestController
 @RequestMapping("/devices")
@@ -57,5 +61,20 @@ public class DeviceController {
             @Valid @RequestBody UpdateDeviceEnabledRequest request
     ) {
         return deviceService.updateEnabled(id, request.enabled());
+    }
+
+    @GetMapping("/{id}/status")
+    public DeviceStatusResponse getStatus(@PathVariable Long id) {
+        return deviceService.getStatus(id);
+    }
+
+    @GetMapping("/{id}/temps")
+    public DeviceTemperatureSeriesResponse getTemperatures(
+            @PathVariable Long id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @RequestParam(defaultValue = "0") int limit
+    ) {
+        return deviceService.getTemperatures(id, from, to, limit);
     }
 }

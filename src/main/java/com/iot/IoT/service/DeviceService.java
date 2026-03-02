@@ -3,6 +3,10 @@ package com.iot.IoT.service;
 import com.iot.IoT.dto.CreateDeviceRequest;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
+import com.iot.IoT.dto.DeviceStatusResponse;
+import com.iot.IoT.dto.DeviceTemperatureSeriesResponse;
+
+import java.time.Instant;
 
 public interface DeviceService {
 
@@ -13,4 +17,8 @@ public interface DeviceService {
     DevicePageResponse findAll(int page, int size);
 
     DeviceResponse updateEnabled(Long id, boolean enabled);
+
+    DeviceStatusResponse getStatus(Long id);
+
+    DeviceTemperatureSeriesResponse getTemperatures(Long id, Instant from, Instant to, int limit);
 }
