@@ -1,6 +1,9 @@
 package com.iot.IoT.controller;
 
+import com.iot.IoT.control.ControlAction;
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceCommandPageResponse;
+import com.iot.IoT.dto.DeviceCommandResponse;
 import com.iot.IoT.dto.DeviceControlPolicyResponse;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
@@ -265,6 +268,87 @@ class DeviceControllerTest {
                                   "targetTemp": 64.5
                                 }
                                 """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("POST /devices/{id}/commands should return sent command")
+    void sendCommand_success() throws Exception {
+        DeviceCommandResponse response = new DeviceCommandResponse(
+                10L,
+                1L,
+                "SV-001",
+                ControlAction.HEAT_ON,
+                com.iot.IoT.entity.DeviceCommandStatus.SENT,
+                "devices/SV-001/cmd",
+                "{\"commandId\":10,\"commandType\":\"HEAT_ON\"}",
+                Instant.parse("2026-03-02T00:00:00Z"),
+                Instant.parse("2026-03-02T00:00:01Z"),
+                null
+        );
+        when(deviceService.sendCommand(eq(1L), eq(ControlAction.HEAT_ON))).thenReturn(response);
+
+        mockMvc.perform(post("/devices/1/commands")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "commandType": "HEAT_ON"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.commandId").value(10))
+                .andExpect(jsonPath("$.status").value("SENT"))
+                .andExpect(jsonPath("$.commandType").value("HEAT_ON"));
+    }
+
+    @Test
+    @DisplayName("POST /devices/{id}/commands should validate request")
+    void sendCommand_invalidRequest() throws Exception {
+        mockMvc.perform(post("/devices/1/commands")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("GET /devices/{id}/commands should return command history")
+    void getCommands_success() throws Exception {
+        DeviceCommandPageResponse response = new DeviceCommandPageResponse(
+                1L,
+                "SV-001",
+                20,
+                List.of(
+                        new DeviceCommandResponse(
+                                10L,
+                                1L,
+                                "SV-001",
+                                ControlAction.HEAT_ON,
+                                com.iot.IoT.entity.DeviceCommandStatus.SENT,
+                                "devices/SV-001/cmd",
+                                "{\"commandId\":10,\"commandType\":\"HEAT_ON\"}",
+                                Instant.parse("2026-03-02T00:00:00Z"),
+                                Instant.parse("2026-03-02T00:00:01Z"),
+                                null
+                        )
+                )
+        );
+        when(deviceService.getCommands(1L, 0)).thenReturn(response);
+
+        mockMvc.perform(get("/devices/1/commands"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].commandType").value("HEAT_ON"))
+                .andExpect(jsonPath("$.items[0].status").value("SENT"));
+    }
+
+    @Test
+    @DisplayName("GET /devices/{id}/commands should validate limit")
+    void getCommands_invalidLimit() throws Exception {
+        when(deviceService.getCommands(1L, 101))
+                .thenThrow(new InvalidDeviceQueryException("limit must be between 1 and 100"));
+
+        mockMvc.perform(get("/devices/1/commands").param("limit", "101"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }

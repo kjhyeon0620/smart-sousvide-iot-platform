@@ -1,11 +1,14 @@
 package com.iot.IoT.service;
 
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceCommandPageResponse;
+import com.iot.IoT.dto.DeviceCommandResponse;
 import com.iot.IoT.dto.DeviceControlPolicyResponse;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
 import com.iot.IoT.dto.DeviceStatusResponse;
 import com.iot.IoT.dto.DeviceTemperatureSeriesResponse;
+import com.iot.IoT.control.ControlAction;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -27,4 +30,8 @@ public interface DeviceService {
     DeviceControlPolicyResponse getControlPolicy(Long id);
 
     DeviceControlPolicyResponse updateControlPolicy(Long id, BigDecimal targetTemp, BigDecimal hysteresis);
+
+    DeviceCommandResponse sendCommand(Long id, ControlAction commandType);
+
+    DeviceCommandPageResponse getCommands(Long id, int limit);
 }

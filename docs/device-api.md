@@ -135,6 +135,45 @@
   - `404 Not Found`
   - `400 Bad Request` (유효성 실패)
 
+### 9) POST /devices/{id}/commands
+- 설명: 디바이스로 다운링크 명령을 발행하고 이력을 저장한다.
+- Request body:
+```json
+{
+  "commandType": "HEAT_ON"
+}
+```
+- Rules:
+  - `commandType`: required (`HEAT_ON`, `HEAT_OFF`, `HOLD`)
+- Response example:
+```json
+{
+  "commandId": 10,
+  "devicePk": 1,
+  "deviceId": "SV-001",
+  "commandType": "HEAT_ON",
+  "status": "SENT",
+  "topic": "devices/SV-001/cmd",
+  "payload": "{\"commandId\":10,\"commandType\":\"HEAT_ON\",\"requestedAt\":\"2026-03-02T00:00:00Z\"}",
+  "requestedAt": "2026-03-02T00:00:00Z",
+  "sentAt": "2026-03-02T00:00:01Z",
+  "errorMessage": null
+}
+```
+- Responses:
+  - `200 OK` (`SENT` 또는 `FAILED`)
+  - `404 Not Found`
+  - `400 Bad Request`
+
+### 10) GET /devices/{id}/commands?limit={n}
+- 설명: 디바이스 다운링크 명령 이력을 조회한다.
+- Query params:
+  - `limit` optional (기본: `20`, 허용 범위 `1..100`)
+- Responses:
+  - `200 OK`
+  - `404 Not Found`
+  - `400 Bad Request` (invalid `limit`)
+
 ## Error Response Contract
 ```json
 {

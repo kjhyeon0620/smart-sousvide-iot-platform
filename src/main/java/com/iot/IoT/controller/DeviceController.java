@@ -1,11 +1,14 @@
 package com.iot.IoT.controller;
 
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceCommandPageResponse;
+import com.iot.IoT.dto.DeviceCommandResponse;
 import com.iot.IoT.dto.DeviceControlPolicyResponse;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
 import com.iot.IoT.dto.DeviceStatusResponse;
 import com.iot.IoT.dto.DeviceTemperatureSeriesResponse;
+import com.iot.IoT.dto.SendDeviceCommandRequest;
 import com.iot.IoT.dto.UpdateDeviceControlPolicyRequest;
 import com.iot.IoT.dto.UpdateDeviceEnabledRequest;
 import com.iot.IoT.service.DeviceService;
@@ -91,5 +94,21 @@ public class DeviceController {
             @Valid @RequestBody UpdateDeviceControlPolicyRequest request
     ) {
         return deviceService.updateControlPolicy(id, request.targetTemp(), request.hysteresis());
+    }
+
+    @PostMapping("/{id}/commands")
+    public DeviceCommandResponse sendCommand(
+            @PathVariable Long id,
+            @Valid @RequestBody SendDeviceCommandRequest request
+    ) {
+        return deviceService.sendCommand(id, request.commandType());
+    }
+
+    @GetMapping("/{id}/commands")
+    public DeviceCommandPageResponse getCommands(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int limit
+    ) {
+        return deviceService.getCommands(id, limit);
     }
 }

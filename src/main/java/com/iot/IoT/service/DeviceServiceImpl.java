@@ -1,6 +1,9 @@
 package com.iot.IoT.service;
 
+import com.iot.IoT.control.ControlAction;
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceCommandPageResponse;
+import com.iot.IoT.dto.DeviceCommandResponse;
 import com.iot.IoT.dto.DeviceControlPolicyResponse;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
@@ -8,7 +11,11 @@ import com.iot.IoT.dto.DeviceStatusResponse;
 import com.iot.IoT.dto.DeviceTemperaturePointResponse;
 import com.iot.IoT.dto.DeviceTemperatureSeriesResponse;
 import com.iot.IoT.entity.Device;
+import com.iot.IoT.entity.DeviceCommand;
+import com.iot.IoT.entity.DeviceCommandStatus;
 import com.iot.IoT.ingestion.port.TemperatureTimeSeriesQueryPort;
+import com.iot.IoT.mqtt.port.DeviceCommandPublisherPort;
+import com.iot.IoT.repository.DeviceCommandRepository;
 import com.iot.IoT.repository.DeviceRepository;
 import com.iot.IoT.service.exception.DeviceNotFoundException;
 import com.iot.IoT.service.exception.DuplicateDeviceException;
@@ -35,22 +42,31 @@ public class DeviceServiceImpl implements DeviceService {
     private static final int MIN_TEMP_LIMIT = 1;
     private static final int MAX_TEMP_LIMIT = 500;
     private static final int DEFAULT_TEMP_LIMIT = 200;
+    private static final int DEFAULT_COMMAND_LIMIT = 20;
+    private static final int MIN_COMMAND_LIMIT = 1;
+    private static final int MAX_COMMAND_LIMIT = 100;
     private static final Duration DEFAULT_RANGE = Duration.ofHours(1);
 
     private final DeviceRepository deviceRepository;
+    private final DeviceCommandRepository deviceCommandRepository;
     private final WatchdogStatePort watchdogStatePort;
     private final TemperatureTimeSeriesQueryPort temperatureTimeSeriesQueryPort;
+    private final DeviceCommandPublisherPort deviceCommandPublisherPort;
     private final Duration heartbeatTtl;
 
     public DeviceServiceImpl(
             DeviceRepository deviceRepository,
+            DeviceCommandRepository deviceCommandRepository,
             WatchdogStatePort watchdogStatePort,
             TemperatureTimeSeriesQueryPort temperatureTimeSeriesQueryPort,
+            DeviceCommandPublisherPort deviceCommandPublisherPort,
             @Value("${ingestion.heartbeat-ttl-seconds:120}") long heartbeatTtlSeconds
     ) {
         this.deviceRepository = deviceRepository;
+        this.deviceCommandRepository = deviceCommandRepository;
         this.watchdogStatePort = watchdogStatePort;
         this.temperatureTimeSeriesQueryPort = temperatureTimeSeriesQueryPort;
+        this.deviceCommandPublisherPort = deviceCommandPublisherPort;
         this.heartbeatTtl = Duration.ofSeconds(heartbeatTtlSeconds);
     }
 
@@ -167,6 +183,58 @@ public class DeviceServiceImpl implements DeviceService {
         return toControlPolicyResponse(updated);
     }
 
+    @Override
+    @Transactional
+    public DeviceCommandResponse sendCommand(Long id, ControlAction commandType) {
+        Device device = findEntity(id);
+        String topic = buildCommandTopic(device.getDeviceId());
+
+        DeviceCommand command = new DeviceCommand();
+        command.setDevicePk(device.getId());
+        command.setDeviceId(device.getDeviceId());
+        command.setCommandType(commandType);
+        command.setStatus(DeviceCommandStatus.PENDING);
+        command.setTopic(topic);
+        command.setPayload("");
+
+        DeviceCommand created = deviceCommandRepository.save(command);
+        if (created.getId() == null) {
+            throw new IllegalStateException("Device command id was not generated");
+        }
+        Instant requestedAt = created.getRequestedAt() == null ? Instant.now() : created.getRequestedAt();
+        created.setRequestedAt(requestedAt);
+        String payload = buildCommandPayload(created.getId(), commandType, requestedAt);
+        created.setPayload(payload);
+
+        try {
+            deviceCommandPublisherPort.publish(topic, payload);
+            created.setStatus(DeviceCommandStatus.SENT);
+            created.setSentAt(Instant.now());
+            created.setErrorMessage(null);
+        } catch (RuntimeException ex) {
+            created.setStatus(DeviceCommandStatus.FAILED);
+            created.setSentAt(null);
+            created.setErrorMessage(ex.getMessage());
+        }
+
+        DeviceCommand saved = deviceCommandRepository.save(created);
+        return toCommandResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DeviceCommandPageResponse getCommands(Long id, int limit) {
+        Device device = findEntity(id);
+        int normalizedLimit = normalizeCommandLimit(limit);
+        List<DeviceCommandResponse> items = deviceCommandRepository.findByDevicePkOrderByRequestedAtDesc(
+                        device.getId(),
+                        PageRequest.of(0, normalizedLimit)
+                ).stream()
+                .map(this::toCommandResponse)
+                .toList();
+        return new DeviceCommandPageResponse(device.getId(), device.getDeviceId(), normalizedLimit, items);
+    }
+
     private Device findEntity(Long id) {
         return deviceRepository.findById(id)
                 .orElseThrow(() -> new DeviceNotFoundException(id));
@@ -190,6 +258,21 @@ public class DeviceServiceImpl implements DeviceService {
                 device.getControlTargetTemp(),
                 device.getControlHysteresis(),
                 device.getUpdatedAt()
+        );
+    }
+
+    private DeviceCommandResponse toCommandResponse(DeviceCommand command) {
+        return new DeviceCommandResponse(
+                command.getId(),
+                command.getDevicePk(),
+                command.getDeviceId(),
+                command.getCommandType(),
+                command.getStatus(),
+                command.getTopic(),
+                command.getPayload(),
+                command.getRequestedAt(),
+                command.getSentAt(),
+                command.getErrorMessage()
         );
     }
 
@@ -227,6 +310,28 @@ public class DeviceServiceImpl implements DeviceService {
             );
         }
         return limit;
+    }
+
+    private int normalizeCommandLimit(int limit) {
+        if (limit == 0) {
+            return DEFAULT_COMMAND_LIMIT;
+        }
+        if (limit < MIN_COMMAND_LIMIT || limit > MAX_COMMAND_LIMIT) {
+            throw new InvalidDeviceQueryException(
+                    "limit must be between %d and %d".formatted(MIN_COMMAND_LIMIT, MAX_COMMAND_LIMIT)
+            );
+        }
+        return limit;
+    }
+
+    private String buildCommandTopic(String deviceId) {
+        return "devices/%s/cmd".formatted(deviceId);
+    }
+
+    private String buildCommandPayload(Long commandId, ControlAction commandType, Instant requestedAt) {
+        return """
+                {"commandId":%d,"commandType":"%s","requestedAt":"%s"}
+                """.formatted(commandId, commandType.name(), requestedAt.toString()).trim();
     }
 
     private Range resolveRange(Instant from, Instant to) {
