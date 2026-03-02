@@ -1,5 +1,7 @@
 package com.iot.IoT.ingestion.metrics;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -33,36 +35,64 @@ public class IngestionMetricsCollector {
     private final AtomicLong lastRedisSuccess = new AtomicLong(0);
     private final AtomicLong lastRedisFailure = new AtomicLong(0);
 
+    private final Counter mqttReceivedCounter;
+    private final Counter parseSuccessCounter;
+    private final Counter parseFailureCounter;
+    private final Counter influxSuccessCounter;
+    private final Counter influxFailureCounter;
+    private final Counter influxBypassCounter;
+    private final Counter redisSuccessCounter;
+    private final Counter redisFailureCounter;
+
+    public IngestionMetricsCollector(MeterRegistry meterRegistry) {
+        this.mqttReceivedCounter = meterRegistry.counter("iot.ingestion.mqtt.received.total");
+        this.parseSuccessCounter = meterRegistry.counter("iot.ingestion.parse.success.total");
+        this.parseFailureCounter = meterRegistry.counter("iot.ingestion.parse.failure.total");
+        this.influxSuccessCounter = meterRegistry.counter("iot.ingestion.influx.success.total");
+        this.influxFailureCounter = meterRegistry.counter("iot.ingestion.influx.failure.total");
+        this.influxBypassCounter = meterRegistry.counter("iot.ingestion.influx.bypass.total");
+        this.redisSuccessCounter = meterRegistry.counter("iot.ingestion.redis.success.total");
+        this.redisFailureCounter = meterRegistry.counter("iot.ingestion.redis.failure.total");
+    }
+
     public void recordMqttReceived() {
         mqttReceivedTotal.increment();
+        mqttReceivedCounter.increment();
     }
 
     public void recordParseSuccess() {
         parseSuccessTotal.increment();
+        parseSuccessCounter.increment();
     }
 
     public void recordParseFailure() {
         parseFailureTotal.increment();
+        parseFailureCounter.increment();
     }
 
     public void recordInfluxSuccess() {
         influxSuccessTotal.increment();
+        influxSuccessCounter.increment();
     }
 
     public void recordInfluxFailure() {
         influxFailureTotal.increment();
+        influxFailureCounter.increment();
     }
 
     public void recordInfluxBypass() {
         influxBypassTotal.increment();
+        influxBypassCounter.increment();
     }
 
     public void recordRedisSuccess() {
         redisSuccessTotal.increment();
+        redisSuccessCounter.increment();
     }
 
     public void recordRedisFailure() {
         redisFailureTotal.increment();
+        redisFailureCounter.increment();
     }
 
     @Scheduled(fixedDelayString = "${ingestion.metrics-log-interval-ms:1000}")

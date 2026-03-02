@@ -22,6 +22,7 @@ import com.iot.IoT.service.exception.DeviceCommandNotFoundException;
 import com.iot.IoT.service.exception.DeviceNotFoundException;
 import com.iot.IoT.service.exception.DuplicateDeviceException;
 import com.iot.IoT.service.exception.InvalidDeviceQueryException;
+import com.iot.IoT.service.metrics.DownlinkMetricsRecorder;
 import com.iot.IoT.watchdog.port.WatchdogStatePort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -52,6 +53,7 @@ class DeviceServiceImplTest {
     private WatchdogStatePort watchdogStatePort;
     private TemperatureTimeSeriesQueryPort temperatureTimeSeriesQueryPort;
     private DeviceCommandPublisherPort deviceCommandPublisherPort;
+    private DownlinkMetricsRecorder downlinkMetricsRecorder;
     private DeviceServiceImpl deviceService;
 
     @BeforeEach
@@ -61,12 +63,14 @@ class DeviceServiceImplTest {
         watchdogStatePort = Mockito.mock(WatchdogStatePort.class);
         temperatureTimeSeriesQueryPort = Mockito.mock(TemperatureTimeSeriesQueryPort.class);
         deviceCommandPublisherPort = Mockito.mock(DeviceCommandPublisherPort.class);
+        downlinkMetricsRecorder = Mockito.mock(DownlinkMetricsRecorder.class);
         deviceService = new DeviceServiceImpl(
                 deviceRepository,
                 deviceCommandRepository,
                 watchdogStatePort,
                 temperatureTimeSeriesQueryPort,
                 deviceCommandPublisherPort,
+                downlinkMetricsRecorder,
                 120,
                 10,
                 30,
