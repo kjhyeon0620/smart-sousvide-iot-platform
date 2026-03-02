@@ -41,6 +41,24 @@ public class DeviceCommand {
     @Column(name = "payload", nullable = false, length = 1000)
     private String payload;
 
+    @Column(name = "idempotency_key", nullable = false, length = 100)
+    private String idempotencyKey;
+
+    @Column(name = "retry_count", nullable = false)
+    private int retryCount;
+
+    @Column(name = "max_retries", nullable = false)
+    private int maxRetries;
+
+    @Column(name = "next_retry_at")
+    private Instant nextRetryAt;
+
+    @Column(name = "expire_at")
+    private Instant expireAt;
+
+    @Column(name = "acked_at")
+    private Instant ackedAt;
+
     @Column(name = "requested_at", nullable = false, updatable = false)
     private Instant requestedAt;
 
@@ -100,6 +118,54 @@ public class DeviceCommand {
 
     public void setPayload(String payload) {
         this.payload = payload;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(int retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public int getMaxRetries() {
+        return maxRetries;
+    }
+
+    public void setMaxRetries(int maxRetries) {
+        this.maxRetries = maxRetries;
+    }
+
+    public Instant getNextRetryAt() {
+        return nextRetryAt;
+    }
+
+    public void setNextRetryAt(Instant nextRetryAt) {
+        this.nextRetryAt = nextRetryAt;
+    }
+
+    public Instant getExpireAt() {
+        return expireAt;
+    }
+
+    public void setExpireAt(Instant expireAt) {
+        this.expireAt = expireAt;
+    }
+
+    public Instant getAckedAt() {
+        return ackedAt;
+    }
+
+    public void setAckedAt(Instant ackedAt) {
+        this.ackedAt = ackedAt;
     }
 
     public Instant getRequestedAt() {
