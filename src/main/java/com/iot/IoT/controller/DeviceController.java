@@ -1,10 +1,12 @@
 package com.iot.IoT.controller;
 
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceControlPolicyResponse;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
 import com.iot.IoT.dto.DeviceStatusResponse;
 import com.iot.IoT.dto.DeviceTemperatureSeriesResponse;
+import com.iot.IoT.dto.UpdateDeviceControlPolicyRequest;
 import com.iot.IoT.dto.UpdateDeviceEnabledRequest;
 import com.iot.IoT.service.DeviceService;
 import jakarta.validation.Valid;
@@ -76,5 +78,18 @@ public class DeviceController {
             @RequestParam(defaultValue = "0") int limit
     ) {
         return deviceService.getTemperatures(id, from, to, limit);
+    }
+
+    @GetMapping("/{id}/control-policy")
+    public DeviceControlPolicyResponse getControlPolicy(@PathVariable Long id) {
+        return deviceService.getControlPolicy(id);
+    }
+
+    @PatchMapping("/{id}/control-policy")
+    public DeviceControlPolicyResponse updateControlPolicy(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateDeviceControlPolicyRequest request
+    ) {
+        return deviceService.updateControlPolicy(id, request.targetTemp(), request.hysteresis());
     }
 }
