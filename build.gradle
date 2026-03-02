@@ -30,6 +30,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation' // 데이터 유효성 검증
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'io.micrometer:micrometer-registry-prometheus'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
 
 	// 2. IoT Messaging (MQTT) - 핵심
 	// 단순 Paho Client가 아닌 Spring Integration을 사용하여 메시지 채널을 관리한다.
