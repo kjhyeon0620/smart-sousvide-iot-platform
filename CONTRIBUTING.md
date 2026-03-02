@@ -2,7 +2,13 @@
 
 ## Branch Strategy
 - `main`: 배포 기준 브랜치(직접 푸시 금지)
-- `feature/*`, `bugfix/*`, `chore/*`: 작업 브랜치
+- 작업 브랜치 prefix:
+  - `feature`: 사용자 기능 추가
+  - `techdebt`: 내부 구조 개선/리팩토링/성능 개선
+  - `bugfix`: 결함 수정
+- 브랜치 네이밍:
+  - `<type>/#<issue-number>-<short-kebab-summary>`
+  - 예: `feature/#26-device-domain-api-foundation`
 
 ## Commit Convention
 - Conventional Commits 사용

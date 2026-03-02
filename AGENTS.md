@@ -12,8 +12,15 @@ Do not rely on memory or ad-hoc behavior.
 6. After merge: switch `main`, pull, delete local/remote work branch.
 
 ## Branch Naming
-- Format: `techdebt/#<issue-number>-<short-kebab-summary>`
-- Example: `techdebt/#20-hive-10k-influx-bypass-isolation`
+- Format: `<type>/#<issue-number>-<short-kebab-summary>`
+- Allowed `type`:
+  - `feature`: 사용자 기능 추가
+  - `techdebt`: 내부 구조 개선/리팩토링/성능 개선
+  - `bugfix`: 결함 수정
+- Example:
+  - `feature/#26-device-domain-api-foundation`
+  - `techdebt/#20-hive-10k-influx-bypass-isolation`
+  - `bugfix/#31-watchdog-duplicate-notify-fix`
 
 ## Hard Rules
 - Never start implementation work directly on `main`.
@@ -25,5 +32,4 @@ Do not rely on memory or ad-hoc behavior.
 - Guard check:
   - `scripts/dev/pr-guard.sh <allowed-file-1> <allowed-file-2> ...`
 - Issue + branch bootstrap:
-  - `scripts/dev/issue-branch.sh "<issue title>" "<branch-suffix>"`
-
+  - `scripts/dev/issue-branch.sh "<issue title>" "<branch-type>" "<branch-suffix>"`

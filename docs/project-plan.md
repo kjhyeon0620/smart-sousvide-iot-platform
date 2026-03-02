@@ -125,3 +125,15 @@
 - 부하 테스트 실행 계획: `docs/load-test-scenarios.md`
 - 부하 테스트 결과 기록: `docs/load-test-results.md`
 - 협업 프로토콜: `docs/ai-collaboration.md`
+- 제품화/리팩토링 로드맵: `docs/refactoring-roadmap.md`
+
+## 11. Productization Direction (Portfolio Focus)
+- 현재 강점(ingestion/watchdog/loadtest)을 유지한 채, 제품형 완성도를 높이는 확장을 우선한다.
+- 권장 우선순위:
+  1. Device 관리 API(등록/조회/정책)로 도메인 계층 완성
+  2. Downlink 제어 명령 경로(MQTT publish + ACK/재시도 + idempotency) 추가
+  3. Prometheus/Grafana 기반 관측성(메트릭/대시보드/알람) 보강
+  4. 이후 Kafka/RabbitMQ + DLQ를 2단계 확장으로 검토
+- 판단 원칙:
+  - 단기(포트폴리오 임팩트): API/운영성/관측성 고도화
+  - 중기(규모 확장): 메시지 큐 기반 비동기 분리 및 재처리 체계
