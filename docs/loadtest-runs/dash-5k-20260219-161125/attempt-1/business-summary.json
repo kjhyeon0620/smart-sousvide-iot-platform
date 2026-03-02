@@ -1,0 +1,22 @@
+{
+  "run_id": "dash-5k-20260219-161125",
+  "attempt": "1",
+  "recv_total": 66,
+  "parse_ok_total": 66,
+  "parse_fail_total": 0,
+  "influx_ok_total": 0,
+  "influx_fail_total": 66,
+  "influx_bypass_total": 0,
+  "redis_ok_total": 65,
+  "redis_fail_total": 0,
+  "pipeline_success_total": 0,
+  "pipeline_failure_total": 66,
+  "pipeline_success_rate": 0.0000,
+  "pipeline_success_rate_pct": 0.00,
+  "pipeline_success_formula": "min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total",
+  "core_pipeline_success_total": 65,
+  "core_pipeline_failure_total": 1,
+  "core_pipeline_success_rate": 0.9848,
+  "core_pipeline_success_rate_pct": 98.48,
+  "core_pipeline_success_formula": "min(parse_ok_total, redis_ok_total) / recv_total"
+}

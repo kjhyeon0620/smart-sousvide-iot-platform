@@ -154,3 +154,15 @@ SIM_TASK=mqttLoadTestHive RUN_ID="pr2-hive-10k-$(date +%Y%m%d-%H%M%S)" MAX_ATTEM
 ```
 
 Use the same split-table schema above for PR2 rows, with `Influx Bypass` and `Business core pipeline success` as required columns.
+
+## Visual Dashboard (MVP)
+- Open `docs/loadtest-dashboard.html` in a browser.
+- After each load run, dashboard manifest is refreshed automatically.
+- Click `Refresh List`, then select `run` + `attempt` and click `Load Selected`.
+- Upload two files from the same run attempt:
+  - `docs/loadtest-runs/<run-id>/attempt-<n>/connection-summary.json`
+  - `docs/loadtest-runs/<run-id>/attempt-<n>/business-summary.json`
+- Dashboard shows:
+  - connection success and throughput
+  - business overall/core success split
+  - parse/influx/redis failure counters and bypass count
