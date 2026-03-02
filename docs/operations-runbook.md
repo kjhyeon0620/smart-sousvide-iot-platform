@@ -1,0 +1,70 @@
+# Operations Runbook (Phase 7)
+
+## Purpose
+- Grafana 대시보드를 기준으로 ingestion/downlink 이상 징후를 빠르게 분류하고 대응한다.
+
+## Prerequisites
+1. 앱 실행 상태
+2. Prometheus가 `/actuator/prometheus` 스크랩 중
+3. Grafana datasource(`Prometheus`) 연결 완료
+
+## Dashboard Import
+1. Grafana > Dashboards > Import
+2. `docs/grafana-observability-dashboard.json` 업로드
+3. `DS_PROMETHEUS`에 Prometheus datasource 매핑
+
+## Triage Flow
+1. Ingestion Throughput 확인
+- `mqtt recv/s` 급감 여부 확인
+
+2. Ingestion Failure Ratios 확인
+- `parse failure ratio` 상승 시 payload/스키마 변경 의심
+- `influx failure ratio` 상승 시 Influx 연결/토큰/지연 점검
+- `redis failure ratio` 상승 시 Redis 연결/메모리 점검
+
+3. Downlink Command Events 확인
+- `failed/s`, `expired/s`, `retried/s` 급증 여부 확인
+
+4. Downlink Reliability Ratios 확인
+- `acked ratio` 하락 + `timeout ratio` 상승이면 디바이스 ACK 경로 또는 네트워크 지연 우선 점검
+
+5. System Runtime Overview 확인
+- CPU 급등, thread 증가, HTTP req/s 급증 여부 확인
+
+## Incident Scenarios
+### 1) Parse Failure 급증
+- 증상: `parse failure ratio` > 1%
+- 점검:
+  - 최근 payload 포맷 변경 여부
+  - enum/string 필드 값 변경 여부
+  - 배포 직후 발생인지 확인
+- 조치:
+  - 파서 유효성 규칙과 송신 포맷 동기화
+
+### 2) Downlink Timeout 급증
+- 증상: `timeout ratio` 상승, `acked ratio` 하락
+- 점검:
+  - ACK endpoint 트래픽 유입 여부
+  - 명령 topic 발행 성공 여부(`sent/s` 대비 `acked/s`)
+  - retry 증가 동반 여부
+- 조치:
+  - ACK 경로 우선 복구
+  - 필요 시 `downlink.ack-timeout-seconds`, `downlink.retry-interval-seconds` 조정
+
+### 3) Downlink Failed 급증
+- 증상: `failed/s` 급증
+- 점검:
+  - MQTT broker 연결 상태
+  - 인증/토픽 권한 설정
+  - 앱 로그의 publish exception 확인
+- 조치:
+  - broker 연결/인증 복구 후 재시도
+
+## Suggested Thresholds (Initial)
+- parse failure ratio: `> 0.01` (1%)
+- timeout ratio: `> 0.05` (5%)
+- downlink failed/s: 평시 대비 3배 이상
+
+## Related Docs
+- `docs/observability.md`
+- `docs/device-api.md`
