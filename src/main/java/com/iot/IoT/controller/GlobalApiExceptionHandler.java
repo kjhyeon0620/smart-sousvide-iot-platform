@@ -3,6 +3,7 @@ package com.iot.IoT.controller;
 import com.iot.IoT.dto.ApiErrorResponse;
 import com.iot.IoT.service.exception.DeviceNotFoundException;
 import com.iot.IoT.service.exception.DuplicateDeviceException;
+import com.iot.IoT.service.exception.InvalidDeviceQueryException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +38,11 @@ public class GlobalApiExceptionHandler {
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
+        return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidDeviceQueryException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidQuery(InvalidDeviceQueryException ex) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", ex.getMessage());
     }
 

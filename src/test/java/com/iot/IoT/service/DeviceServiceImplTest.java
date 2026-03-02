@@ -3,10 +3,17 @@ package com.iot.IoT.service;
 import com.iot.IoT.dto.CreateDeviceRequest;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
+import com.iot.IoT.dto.DeviceStatusResponse;
+import com.iot.IoT.dto.DeviceTemperaturePointResponse;
+import com.iot.IoT.dto.DeviceTemperatureSeriesResponse;
 import com.iot.IoT.entity.Device;
+import com.iot.IoT.ingestion.dto.DeviceState;
+import com.iot.IoT.ingestion.port.TemperatureTimeSeriesQueryPort;
 import com.iot.IoT.repository.DeviceRepository;
 import com.iot.IoT.service.exception.DeviceNotFoundException;
 import com.iot.IoT.service.exception.DuplicateDeviceException;
+import com.iot.IoT.service.exception.InvalidDeviceQueryException;
+import com.iot.IoT.watchdog.port.WatchdogStatePort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,12 +39,21 @@ import static org.mockito.Mockito.when;
 class DeviceServiceImplTest {
 
     private DeviceRepository deviceRepository;
+    private WatchdogStatePort watchdogStatePort;
+    private TemperatureTimeSeriesQueryPort temperatureTimeSeriesQueryPort;
     private DeviceServiceImpl deviceService;
 
     @BeforeEach
     void setUp() {
         deviceRepository = Mockito.mock(DeviceRepository.class);
-        deviceService = new DeviceServiceImpl(deviceRepository);
+        watchdogStatePort = Mockito.mock(WatchdogStatePort.class);
+        temperatureTimeSeriesQueryPort = Mockito.mock(TemperatureTimeSeriesQueryPort.class);
+        deviceService = new DeviceServiceImpl(
+                deviceRepository,
+                watchdogStatePort,
+                temperatureTimeSeriesQueryPort,
+                120
+        );
     }
 
     @Test
@@ -115,6 +131,74 @@ class DeviceServiceImplTest {
         assertEquals(1, response.totalPages());
         assertEquals(0, response.page());
         assertEquals(2, response.size());
+    }
+
+    @Test
+    @DisplayName("Should return composed status with online true and latest telemetry")
+    void getStatus_success() {
+        Device device = sampleDevice(1L, "SV-001", true);
+        Instant now = Instant.now();
+        DeviceTemperaturePointResponse latest = new DeviceTemperaturePointResponse(
+                now.minusSeconds(2),
+                java.math.BigDecimal.valueOf(60.1),
+                java.math.BigDecimal.valueOf(65.0),
+                DeviceState.HEATING
+        );
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(watchdogStatePort.findLastSeen("SV-001")).thenReturn(Optional.of(now.minusSeconds(10)));
+        when(temperatureTimeSeriesQueryPort.findLatest("SV-001")).thenReturn(Optional.of(latest));
+
+        DeviceStatusResponse response = deviceService.getStatus(1L);
+
+        assertEquals("SV-001", response.deviceId());
+        assertEquals(true, response.online());
+        assertEquals(DeviceState.HEATING, response.latestState());
+    }
+
+    @Test
+    @DisplayName("Should return temperature series")
+    void getTemperatures_success() {
+        Device device = sampleDevice(1L, "SV-001", true);
+        Instant from = Instant.parse("2026-03-01T00:00:00Z");
+        Instant to = Instant.parse("2026-03-01T00:10:00Z");
+        List<DeviceTemperaturePointResponse> points = List.of(
+                new DeviceTemperaturePointResponse(
+                        Instant.parse("2026-03-01T00:01:00Z"),
+                        java.math.BigDecimal.valueOf(60.0),
+                        java.math.BigDecimal.valueOf(65.0),
+                        DeviceState.HEATING
+                )
+        );
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(temperatureTimeSeriesQueryPort.findRange("SV-001", from, to, 50)).thenReturn(points);
+
+        DeviceTemperatureSeriesResponse response = deviceService.getTemperatures(1L, from, to, 50);
+
+        assertEquals("SV-001", response.deviceId());
+        assertEquals(1, response.items().size());
+        assertEquals(50, response.limit());
+    }
+
+    @Test
+    @DisplayName("Should throw invalid query when from is after to")
+    void getTemperatures_invalidRange() {
+        Device device = sampleDevice(1L, "SV-001", true);
+        Instant from = Instant.parse("2026-03-01T00:10:00Z");
+        Instant to = Instant.parse("2026-03-01T00:00:00Z");
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+
+        assertThrows(InvalidDeviceQueryException.class,
+                () -> deviceService.getTemperatures(1L, from, to, 10));
+    }
+
+    @Test
+    @DisplayName("Should throw invalid query when limit is out of range")
+    void getTemperatures_invalidLimit() {
+        Device device = sampleDevice(1L, "SV-001", true);
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+
+        assertThrows(InvalidDeviceQueryException.class,
+                () -> deviceService.getTemperatures(1L, Instant.now().minusSeconds(60), Instant.now(), 9999));
     }
 
     private Device sampleDevice(Long id, String deviceId, boolean enabled) {
