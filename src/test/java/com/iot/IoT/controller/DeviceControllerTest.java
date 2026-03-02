@@ -287,13 +287,14 @@ class DeviceControllerTest {
                 Instant.parse("2026-03-02T00:00:01Z"),
                 null
         );
-        when(deviceService.sendCommand(eq(1L), eq(ControlAction.HEAT_ON))).thenReturn(response);
+        when(deviceService.sendCommand(eq(1L), eq(ControlAction.HEAT_ON), eq("idem-1"))).thenReturn(response);
 
         mockMvc.perform(post("/devices/1/commands")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "commandType": "HEAT_ON"
+                                  "commandType": "HEAT_ON",
+                                  "idempotencyKey": "idem-1"
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -351,6 +352,28 @@ class DeviceControllerTest {
         mockMvc.perform(get("/devices/1/commands").param("limit", "101"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("POST /devices/{id}/commands/{commandId}/ack should return ACKED")
+    void acknowledgeCommand_success() throws Exception {
+        DeviceCommandResponse response = new DeviceCommandResponse(
+                10L,
+                1L,
+                "SV-001",
+                ControlAction.HEAT_ON,
+                com.iot.IoT.entity.DeviceCommandStatus.ACKED,
+                "devices/SV-001/cmd",
+                "{\"commandId\":10,\"commandType\":\"HEAT_ON\"}",
+                Instant.parse("2026-03-02T00:00:00Z"),
+                Instant.parse("2026-03-02T00:00:01Z"),
+                null
+        );
+        when(deviceService.acknowledgeCommand(1L, 10L)).thenReturn(response);
+
+        mockMvc.perform(post("/devices/1/commands/10/ack"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACKED"));
     }
 
     private DeviceResponse sampleResponse(Long id, String deviceId, boolean enabled) {

@@ -31,7 +31,11 @@ public interface DeviceService {
 
     DeviceControlPolicyResponse updateControlPolicy(Long id, BigDecimal targetTemp, BigDecimal hysteresis);
 
-    DeviceCommandResponse sendCommand(Long id, ControlAction commandType);
+    DeviceCommandResponse sendCommand(Long id, ControlAction commandType, String idempotencyKey);
 
     DeviceCommandPageResponse getCommands(Long id, int limit);
+
+    DeviceCommandResponse acknowledgeCommand(Long id, Long commandId);
+
+    void processCommandReliability();
 }

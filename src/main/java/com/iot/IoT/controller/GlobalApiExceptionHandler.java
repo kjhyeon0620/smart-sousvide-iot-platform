@@ -2,6 +2,7 @@ package com.iot.IoT.controller;
 
 import com.iot.IoT.dto.ApiErrorResponse;
 import com.iot.IoT.service.exception.DeviceNotFoundException;
+import com.iot.IoT.service.exception.DeviceCommandNotFoundException;
 import com.iot.IoT.service.exception.DuplicateDeviceException;
 import com.iot.IoT.service.exception.InvalidDeviceQueryException;
 import jakarta.validation.ConstraintViolationException;
@@ -21,6 +22,11 @@ public class GlobalApiExceptionHandler {
     @ExceptionHandler(DeviceNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleDeviceNotFound(DeviceNotFoundException ex) {
         return error(HttpStatus.NOT_FOUND, "DEVICE_NOT_FOUND", ex.getMessage());
+    }
+
+    @ExceptionHandler(DeviceCommandNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleDeviceCommandNotFound(DeviceCommandNotFoundException ex) {
+        return error(HttpStatus.NOT_FOUND, "COMMAND_NOT_FOUND", ex.getMessage());
     }
 
     @ExceptionHandler(DuplicateDeviceException.class)

@@ -140,11 +140,13 @@
 - Request body:
 ```json
 {
-  "commandType": "HEAT_ON"
+  "commandType": "HEAT_ON",
+  "idempotencyKey": "cmd-20260302-0001"
 }
 ```
 - Rules:
   - `commandType`: required (`HEAT_ON`, `HEAT_OFF`, `HOLD`)
+  - `idempotencyKey`: required, max 100
 - Response example:
 ```json
 {
@@ -161,7 +163,7 @@
 }
 ```
 - Responses:
-  - `200 OK` (`SENT` 또는 `FAILED`)
+  - `200 OK` (`SENT`, `FAILED`, 재요청 시 기존 command 반환)
   - `404 Not Found`
   - `400 Bad Request`
 
@@ -173,6 +175,24 @@
   - `200 OK`
   - `404 Not Found`
   - `400 Bad Request` (invalid `limit`)
+
+### 11) POST /devices/{id}/commands/{commandId}/ack
+- 설명: 다운링크 명령 ACK를 반영한다.
+- Responses:
+  - `200 OK` (`ACKED`)
+  - `404 Not Found` (`DEVICE_NOT_FOUND`, `COMMAND_NOT_FOUND`)
+
+## Downlink Reliability Notes (Phase 5)
+- 상태 모델:
+  - `PENDING`: 생성됨, 아직 발행 전
+  - `SENT`: 발행됨, ACK 대기
+  - `ACKED`: ACK 수신 완료
+  - `EXPIRED`: ACK timeout 초과
+  - `FAILED`: publish 실패 또는 retry 한도 초과
+- 기본 정책:
+  - `ack-timeout`: `30s` (기본값)
+  - `retry-interval`: `10s` (기본값)
+  - `max-retries`: `3` (기본값)
 
 ## Error Response Contract
 ```json
@@ -186,4 +206,5 @@
 ## Error Codes
 - `DEVICE_NOT_FOUND`
 - `DEVICE_DUPLICATE`
+- `COMMAND_NOT_FOUND`
 - `INVALID_REQUEST`

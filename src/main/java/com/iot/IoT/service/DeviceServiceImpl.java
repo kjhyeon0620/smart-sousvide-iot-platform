@@ -17,6 +17,7 @@ import com.iot.IoT.ingestion.port.TemperatureTimeSeriesQueryPort;
 import com.iot.IoT.mqtt.port.DeviceCommandPublisherPort;
 import com.iot.IoT.repository.DeviceCommandRepository;
 import com.iot.IoT.repository.DeviceRepository;
+import com.iot.IoT.service.exception.DeviceCommandNotFoundException;
 import com.iot.IoT.service.exception.DeviceNotFoundException;
 import com.iot.IoT.service.exception.DuplicateDeviceException;
 import com.iot.IoT.service.exception.InvalidDeviceQueryException;
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,6 +48,8 @@ public class DeviceServiceImpl implements DeviceService {
     private static final int MIN_COMMAND_LIMIT = 1;
     private static final int MAX_COMMAND_LIMIT = 100;
     private static final Duration DEFAULT_RANGE = Duration.ofHours(1);
+    private static final EnumSet<DeviceCommandStatus> RELIABILITY_TARGET_STATUSES =
+            EnumSet.of(DeviceCommandStatus.SENT, DeviceCommandStatus.PENDING);
 
     private final DeviceRepository deviceRepository;
     private final DeviceCommandRepository deviceCommandRepository;
@@ -53,6 +57,9 @@ public class DeviceServiceImpl implements DeviceService {
     private final TemperatureTimeSeriesQueryPort temperatureTimeSeriesQueryPort;
     private final DeviceCommandPublisherPort deviceCommandPublisherPort;
     private final Duration heartbeatTtl;
+    private final Duration commandRetryInterval;
+    private final Duration commandAckTimeout;
+    private final int commandMaxRetries;
 
     public DeviceServiceImpl(
             DeviceRepository deviceRepository,
@@ -60,7 +67,10 @@ public class DeviceServiceImpl implements DeviceService {
             WatchdogStatePort watchdogStatePort,
             TemperatureTimeSeriesQueryPort temperatureTimeSeriesQueryPort,
             DeviceCommandPublisherPort deviceCommandPublisherPort,
-            @Value("${ingestion.heartbeat-ttl-seconds:120}") long heartbeatTtlSeconds
+            @Value("${ingestion.heartbeat-ttl-seconds:120}") long heartbeatTtlSeconds,
+            @Value("${downlink.retry-interval-seconds:10}") long commandRetryIntervalSeconds,
+            @Value("${downlink.ack-timeout-seconds:30}") long commandAckTimeoutSeconds,
+            @Value("${downlink.max-retries:3}") int commandMaxRetries
     ) {
         this.deviceRepository = deviceRepository;
         this.deviceCommandRepository = deviceCommandRepository;
@@ -68,6 +78,9 @@ public class DeviceServiceImpl implements DeviceService {
         this.temperatureTimeSeriesQueryPort = temperatureTimeSeriesQueryPort;
         this.deviceCommandPublisherPort = deviceCommandPublisherPort;
         this.heartbeatTtl = Duration.ofSeconds(heartbeatTtlSeconds);
+        this.commandRetryInterval = Duration.ofSeconds(commandRetryIntervalSeconds);
+        this.commandAckTimeout = Duration.ofSeconds(commandAckTimeoutSeconds);
+        this.commandMaxRetries = Math.max(commandMaxRetries, 0);
     }
 
     @Override
@@ -185,15 +198,26 @@ public class DeviceServiceImpl implements DeviceService {
 
     @Override
     @Transactional
-    public DeviceCommandResponse sendCommand(Long id, ControlAction commandType) {
+    public DeviceCommandResponse sendCommand(Long id, ControlAction commandType, String idempotencyKey) {
         Device device = findEntity(id);
+        Optional<DeviceCommand> existing = deviceCommandRepository.findByDevicePkAndIdempotencyKey(
+                device.getId(),
+                idempotencyKey
+        );
+        if (existing.isPresent()) {
+            return toCommandResponse(existing.get());
+        }
+
         String topic = buildCommandTopic(device.getDeviceId());
 
         DeviceCommand command = new DeviceCommand();
         command.setDevicePk(device.getId());
         command.setDeviceId(device.getDeviceId());
+        command.setIdempotencyKey(idempotencyKey);
         command.setCommandType(commandType);
         command.setStatus(DeviceCommandStatus.PENDING);
+        command.setRetryCount(0);
+        command.setMaxRetries(commandMaxRetries);
         command.setTopic(topic);
         command.setPayload("");
 
@@ -203,17 +227,21 @@ public class DeviceServiceImpl implements DeviceService {
         }
         Instant requestedAt = created.getRequestedAt() == null ? Instant.now() : created.getRequestedAt();
         created.setRequestedAt(requestedAt);
+        created.setExpireAt(requestedAt.plus(commandAckTimeout));
         String payload = buildCommandPayload(created.getId(), commandType, requestedAt);
         created.setPayload(payload);
 
         try {
             deviceCommandPublisherPort.publish(topic, payload);
+            Instant sentAt = Instant.now();
             created.setStatus(DeviceCommandStatus.SENT);
-            created.setSentAt(Instant.now());
+            created.setSentAt(sentAt);
+            created.setNextRetryAt(sentAt.plus(commandRetryInterval));
             created.setErrorMessage(null);
         } catch (RuntimeException ex) {
             created.setStatus(DeviceCommandStatus.FAILED);
             created.setSentAt(null);
+            created.setNextRetryAt(null);
             created.setErrorMessage(ex.getMessage());
         }
 
@@ -233,6 +261,54 @@ public class DeviceServiceImpl implements DeviceService {
                 .map(this::toCommandResponse)
                 .toList();
         return new DeviceCommandPageResponse(device.getId(), device.getDeviceId(), normalizedLimit, items);
+    }
+
+    @Override
+    @Transactional
+    public DeviceCommandResponse acknowledgeCommand(Long id, Long commandId) {
+        Device device = findEntity(id);
+        DeviceCommand command = deviceCommandRepository.findByIdAndDevicePk(commandId, device.getId())
+                .orElseThrow(() -> new DeviceCommandNotFoundException(device.getId(), commandId));
+
+        if (command.getStatus() != DeviceCommandStatus.ACKED) {
+            command.setStatus(DeviceCommandStatus.ACKED);
+            command.setAckedAt(Instant.now());
+            command.setNextRetryAt(null);
+            command.setErrorMessage(null);
+            command = deviceCommandRepository.save(command);
+        }
+        return toCommandResponse(command);
+    }
+
+    @Override
+    @Transactional
+    public void processCommandReliability() {
+        Instant now = Instant.now();
+        List<DeviceCommand> targets = deviceCommandRepository.findByStatusIn(RELIABILITY_TARGET_STATUSES);
+        for (DeviceCommand command : targets) {
+            if (command.getStatus() == DeviceCommandStatus.ACKED
+                    || command.getStatus() == DeviceCommandStatus.EXPIRED
+                    || command.getStatus() == DeviceCommandStatus.FAILED) {
+                continue;
+            }
+            if (command.getExpireAt() != null && now.isAfter(command.getExpireAt())) {
+                command.setStatus(DeviceCommandStatus.EXPIRED);
+                command.setNextRetryAt(null);
+                command.setErrorMessage("ack timeout expired");
+                deviceCommandRepository.save(command);
+                continue;
+            }
+            if (command.getStatus() == DeviceCommandStatus.PENDING) {
+                retryPublish(command, now);
+                continue;
+            }
+            if (command.getStatus() == DeviceCommandStatus.SENT
+                    && command.getNextRetryAt() != null
+                    && !now.isBefore(command.getNextRetryAt())
+                    && command.getRetryCount() < command.getMaxRetries()) {
+                retryPublish(command, now);
+            }
+        }
     }
 
     private Device findEntity(Long id) {
@@ -274,6 +350,29 @@ public class DeviceServiceImpl implements DeviceService {
                 command.getSentAt(),
                 command.getErrorMessage()
         );
+    }
+
+    private void retryPublish(DeviceCommand command, Instant now) {
+        try {
+            deviceCommandPublisherPort.publish(command.getTopic(), command.getPayload());
+            command.setStatus(DeviceCommandStatus.SENT);
+            command.setSentAt(now);
+            command.setRetryCount(command.getRetryCount() + 1);
+            command.setNextRetryAt(now.plus(commandRetryInterval));
+            command.setErrorMessage(null);
+        } catch (RuntimeException ex) {
+            int nextRetry = command.getRetryCount() + 1;
+            command.setRetryCount(nextRetry);
+            if (nextRetry >= command.getMaxRetries()) {
+                command.setStatus(DeviceCommandStatus.FAILED);
+                command.setNextRetryAt(null);
+            } else {
+                command.setStatus(DeviceCommandStatus.SENT);
+                command.setNextRetryAt(now.plus(commandRetryInterval));
+            }
+            command.setErrorMessage(ex.getMessage());
+        }
+        deviceCommandRepository.save(command);
     }
 
     private static String normalize(String value) {

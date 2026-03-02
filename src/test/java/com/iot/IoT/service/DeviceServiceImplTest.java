@@ -18,6 +18,7 @@ import com.iot.IoT.ingestion.port.TemperatureTimeSeriesQueryPort;
 import com.iot.IoT.mqtt.port.DeviceCommandPublisherPort;
 import com.iot.IoT.repository.DeviceCommandRepository;
 import com.iot.IoT.repository.DeviceRepository;
+import com.iot.IoT.service.exception.DeviceCommandNotFoundException;
 import com.iot.IoT.service.exception.DeviceNotFoundException;
 import com.iot.IoT.service.exception.DuplicateDeviceException;
 import com.iot.IoT.service.exception.InvalidDeviceQueryException;
@@ -66,7 +67,10 @@ class DeviceServiceImplTest {
                 watchdogStatePort,
                 temperatureTimeSeriesQueryPort,
                 deviceCommandPublisherPort,
-                120
+                120,
+                10,
+                30,
+                3
         );
     }
 
@@ -265,7 +269,9 @@ class DeviceServiceImplTest {
                     return command;
                 });
 
-        DeviceCommandResponse response = deviceService.sendCommand(1L, ControlAction.HEAT_ON);
+        when(deviceCommandRepository.findByDevicePkAndIdempotencyKey(1L, "idem-1")).thenReturn(Optional.empty());
+
+        DeviceCommandResponse response = deviceService.sendCommand(1L, ControlAction.HEAT_ON, "idem-1");
 
         assertEquals(10L, response.commandId());
         assertEquals(DeviceCommandStatus.SENT, response.status());
@@ -293,7 +299,9 @@ class DeviceServiceImplTest {
                 .when(deviceCommandPublisherPort)
                 .publish(eq("devices/SV-001/cmd"), any(String.class));
 
-        DeviceCommandResponse response = deviceService.sendCommand(1L, ControlAction.HEAT_OFF);
+        when(deviceCommandRepository.findByDevicePkAndIdempotencyKey(1L, "idem-2")).thenReturn(Optional.empty());
+
+        DeviceCommandResponse response = deviceService.sendCommand(1L, ControlAction.HEAT_OFF, "idem-2");
 
         assertEquals(11L, response.commandId());
         assertEquals(DeviceCommandStatus.FAILED, response.status());
@@ -324,6 +332,110 @@ class DeviceServiceImplTest {
         assertEquals("SV-001", response.deviceId());
         assertEquals(1, response.items().size());
         assertEquals(ControlAction.HOLD, response.items().get(0).commandType());
+    }
+
+    @Test
+    @DisplayName("Should return existing command when idempotency key already exists")
+    void sendCommand_idempotencyHit() {
+        Device device = sampleDevice(1L, "SV-001", true);
+        DeviceCommand existing = new DeviceCommand();
+        existing.setDevicePk(1L);
+        existing.setDeviceId("SV-001");
+        existing.setCommandType(ControlAction.HEAT_ON);
+        existing.setStatus(DeviceCommandStatus.SENT);
+        existing.setTopic("devices/SV-001/cmd");
+        existing.setPayload("{\"commandId\":77}");
+        existing.setIdempotencyKey("idem-hit");
+        existing.setRequestedAt(Instant.parse("2026-03-02T00:00:00Z"));
+        setId(existing, 77L);
+
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(deviceCommandRepository.findByDevicePkAndIdempotencyKey(1L, "idem-hit"))
+                .thenReturn(Optional.of(existing));
+
+        DeviceCommandResponse response = deviceService.sendCommand(1L, ControlAction.HEAT_ON, "idem-hit");
+
+        assertEquals(77L, response.commandId());
+        verify(deviceCommandPublisherPort, never()).publish(any(String.class), any(String.class));
+    }
+
+    @Test
+    @DisplayName("Should acknowledge command")
+    void acknowledgeCommand_success() {
+        Device device = sampleDevice(1L, "SV-001", true);
+        DeviceCommand command = new DeviceCommand();
+        command.setDevicePk(1L);
+        command.setDeviceId("SV-001");
+        command.setCommandType(ControlAction.HEAT_ON);
+        command.setStatus(DeviceCommandStatus.SENT);
+        command.setTopic("devices/SV-001/cmd");
+        command.setPayload("{\"commandId\":12}");
+        command.setIdempotencyKey("ack-1");
+        command.setRequestedAt(Instant.parse("2026-03-02T00:00:00Z"));
+        setId(command, 12L);
+
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(deviceCommandRepository.findByIdAndDevicePk(12L, 1L)).thenReturn(Optional.of(command));
+        when(deviceCommandRepository.save(any(DeviceCommand.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DeviceCommandResponse response = deviceService.acknowledgeCommand(1L, 12L);
+
+        assertEquals(DeviceCommandStatus.ACKED, response.status());
+    }
+
+    @Test
+    @DisplayName("Should throw when acknowledging missing command")
+    void acknowledgeCommand_notFound() {
+        Device device = sampleDevice(1L, "SV-001", true);
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(deviceCommandRepository.findByIdAndDevicePk(12L, 1L)).thenReturn(Optional.empty());
+
+        assertThrows(DeviceCommandNotFoundException.class, () -> deviceService.acknowledgeCommand(1L, 12L));
+    }
+
+    @Test
+    @DisplayName("Should expire command when ack timeout is reached")
+    void processCommandReliability_expire() {
+        DeviceCommand command = new DeviceCommand();
+        command.setStatus(DeviceCommandStatus.SENT);
+        command.setTopic("devices/SV-001/cmd");
+        command.setPayload("{\"commandId\":1}");
+        command.setRetryCount(0);
+        command.setMaxRetries(3);
+        command.setExpireAt(Instant.now().minusSeconds(1));
+        command.setRequestedAt(Instant.now().minusSeconds(10));
+        command.setIdempotencyKey("exp-1");
+
+        when(deviceCommandRepository.findByStatusIn(any())).thenReturn(List.of(command));
+        when(deviceCommandRepository.save(any(DeviceCommand.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        deviceService.processCommandReliability();
+
+        assertEquals(DeviceCommandStatus.EXPIRED, command.getStatus());
+    }
+
+    @Test
+    @DisplayName("Should retry publish when nextRetryAt is due")
+    void processCommandReliability_retry() {
+        DeviceCommand command = new DeviceCommand();
+        command.setStatus(DeviceCommandStatus.SENT);
+        command.setTopic("devices/SV-001/cmd");
+        command.setPayload("{\"commandId\":2}");
+        command.setRetryCount(0);
+        command.setMaxRetries(3);
+        command.setRequestedAt(Instant.now().minusSeconds(10));
+        command.setExpireAt(Instant.now().plusSeconds(20));
+        command.setNextRetryAt(Instant.now().minusSeconds(1));
+        command.setIdempotencyKey("retry-1");
+
+        when(deviceCommandRepository.findByStatusIn(any())).thenReturn(List.of(command));
+        when(deviceCommandRepository.save(any(DeviceCommand.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        deviceService.processCommandReliability();
+
+        verify(deviceCommandPublisherPort, times(1)).publish(eq("devices/SV-001/cmd"), eq("{\"commandId\":2}"));
+        assertEquals(1, command.getRetryCount());
+        assertEquals(DeviceCommandStatus.SENT, command.getStatus());
     }
 
     @Test

@@ -101,7 +101,7 @@ public class DeviceController {
             @PathVariable Long id,
             @Valid @RequestBody SendDeviceCommandRequest request
     ) {
-        return deviceService.sendCommand(id, request.commandType());
+        return deviceService.sendCommand(id, request.commandType(), request.idempotencyKey());
     }
 
     @GetMapping("/{id}/commands")
@@ -110,5 +110,13 @@ public class DeviceController {
             @RequestParam(defaultValue = "0") int limit
     ) {
         return deviceService.getCommands(id, limit);
+    }
+
+    @PostMapping("/{id}/commands/{commandId}/ack")
+    public DeviceCommandResponse acknowledgeCommand(
+            @PathVariable Long id,
+            @PathVariable Long commandId
+    ) {
+        return deviceService.acknowledgeCommand(id, commandId);
     }
 }
