@@ -102,6 +102,39 @@
   - `404 Not Found`
   - `400 Bad Request` (`from > to`, invalid `limit`)
 
+### 7) GET /devices/{id}/control-policy
+- 설명: 디바이스 제어 정책을 조회한다.
+- Response example:
+```json
+{
+  "devicePk": 1,
+  "deviceId": "SV-001",
+  "targetTemp": 65.0,
+  "hysteresis": 0.3,
+  "updatedAt": "2026-03-02T00:00:00Z"
+}
+```
+- Responses:
+  - `200 OK`
+  - `404 Not Found`
+
+### 8) PATCH /devices/{id}/control-policy
+- 설명: 디바이스 제어 정책을 변경한다.
+- Request body:
+```json
+{
+  "targetTemp": 64.5,
+  "hysteresis": 0.5
+}
+```
+- Rules:
+  - `targetTemp`: required, `> 0`, 소수 둘째 자리까지
+  - `hysteresis`: required, `> 0`, 소수 둘째 자리까지
+- Responses:
+  - `200 OK`
+  - `404 Not Found`
+  - `400 Bad Request` (유효성 실패)
+
 ## Error Response Contract
 ```json
 {

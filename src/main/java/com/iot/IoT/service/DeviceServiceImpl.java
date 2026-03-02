@@ -1,6 +1,7 @@
 package com.iot.IoT.service;
 
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceControlPolicyResponse;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
 import com.iot.IoT.dto.DeviceStatusResponse;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -148,6 +150,23 @@ public class DeviceServiceImpl implements DeviceService {
         );
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public DeviceControlPolicyResponse getControlPolicy(Long id) {
+        Device device = findEntity(id);
+        return toControlPolicyResponse(device);
+    }
+
+    @Override
+    @Transactional
+    public DeviceControlPolicyResponse updateControlPolicy(Long id, BigDecimal targetTemp, BigDecimal hysteresis) {
+        Device device = findEntity(id);
+        device.setControlTargetTemp(targetTemp);
+        device.setControlHysteresis(hysteresis);
+        Device updated = deviceRepository.save(device);
+        return toControlPolicyResponse(updated);
+    }
+
     private Device findEntity(Long id) {
         return deviceRepository.findById(id)
                 .orElseThrow(() -> new DeviceNotFoundException(id));
@@ -160,6 +179,16 @@ public class DeviceServiceImpl implements DeviceService {
                 device.getName(),
                 device.isEnabled(),
                 device.getCreatedAt(),
+                device.getUpdatedAt()
+        );
+    }
+
+    private DeviceControlPolicyResponse toControlPolicyResponse(Device device) {
+        return new DeviceControlPolicyResponse(
+                device.getId(),
+                device.getDeviceId(),
+                device.getControlTargetTemp(),
+                device.getControlHysteresis(),
                 device.getUpdatedAt()
         );
     }

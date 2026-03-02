@@ -10,6 +10,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -31,6 +32,12 @@ public class Device {
 
     @Column(name = "enabled", nullable = false)
     private boolean enabled;
+
+    @Column(name = "control_target_temp", precision = 6, scale = 2)
+    private BigDecimal controlTargetTemp;
+
+    @Column(name = "control_hysteresis", precision = 4, scale = 2)
+    private BigDecimal controlHysteresis;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -64,6 +71,22 @@ public class Device {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public BigDecimal getControlTargetTemp() {
+        return controlTargetTemp;
+    }
+
+    public void setControlTargetTemp(BigDecimal controlTargetTemp) {
+        this.controlTargetTemp = controlTargetTemp;
+    }
+
+    public BigDecimal getControlHysteresis() {
+        return controlHysteresis;
+    }
+
+    public void setControlHysteresis(BigDecimal controlHysteresis) {
+        this.controlHysteresis = controlHysteresis;
     }
 
     public Instant getCreatedAt() {

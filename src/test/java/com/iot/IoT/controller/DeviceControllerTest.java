@@ -1,6 +1,7 @@
 package com.iot.IoT.controller;
 
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceControlPolicyResponse;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
 import com.iot.IoT.dto.DeviceStatusResponse;
@@ -205,6 +206,65 @@ class DeviceControllerTest {
                 .thenThrow(new InvalidDeviceQueryException("from must be before or equal to to"));
 
         mockMvc.perform(get("/devices/1/temps"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("GET /devices/{id}/control-policy should return policy")
+    void getControlPolicy_success() throws Exception {
+        DeviceControlPolicyResponse response = new DeviceControlPolicyResponse(
+                1L,
+                "SV-001",
+                java.math.BigDecimal.valueOf(65.0),
+                java.math.BigDecimal.valueOf(0.3),
+                Instant.parse("2026-03-02T00:00:00Z")
+        );
+        when(deviceService.getControlPolicy(1L)).thenReturn(response);
+
+        mockMvc.perform(get("/devices/1/control-policy"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deviceId").value("SV-001"))
+                .andExpect(jsonPath("$.targetTemp").value(65.0))
+                .andExpect(jsonPath("$.hysteresis").value(0.3));
+    }
+
+    @Test
+    @DisplayName("PATCH /devices/{id}/control-policy should update policy")
+    void patchControlPolicy_success() throws Exception {
+        DeviceControlPolicyResponse response = new DeviceControlPolicyResponse(
+                1L,
+                "SV-001",
+                java.math.BigDecimal.valueOf(64.5),
+                java.math.BigDecimal.valueOf(0.5),
+                Instant.parse("2026-03-02T00:00:00Z")
+        );
+        when(deviceService.updateControlPolicy(eq(1L), eq(java.math.BigDecimal.valueOf(64.5)), eq(java.math.BigDecimal.valueOf(0.5))))
+                .thenReturn(response);
+
+        mockMvc.perform(patch("/devices/1/control-policy")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetTemp": 64.5,
+                                  "hysteresis": 0.5
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.targetTemp").value(64.5))
+                .andExpect(jsonPath("$.hysteresis").value(0.5));
+    }
+
+    @Test
+    @DisplayName("PATCH /devices/{id}/control-policy should validate request")
+    void patchControlPolicy_invalidRequest() throws Exception {
+        mockMvc.perform(patch("/devices/1/control-policy")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetTemp": 64.5
+                                }
+                                """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }

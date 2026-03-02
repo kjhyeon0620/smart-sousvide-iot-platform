@@ -1,6 +1,7 @@
 package com.iot.IoT.service;
 
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceControlPolicyResponse;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
 import com.iot.IoT.dto.DeviceStatusResponse;
@@ -199,6 +200,39 @@ class DeviceServiceImplTest {
 
         assertThrows(InvalidDeviceQueryException.class,
                 () -> deviceService.getTemperatures(1L, Instant.now().minusSeconds(60), Instant.now(), 9999));
+    }
+
+    @Test
+    @DisplayName("Should return control policy")
+    void getControlPolicy_success() {
+        Device device = sampleDevice(1L, "SV-001", true);
+        device.setControlTargetTemp(java.math.BigDecimal.valueOf(65.0));
+        device.setControlHysteresis(java.math.BigDecimal.valueOf(0.3));
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+
+        DeviceControlPolicyResponse response = deviceService.getControlPolicy(1L);
+
+        assertEquals("SV-001", response.deviceId());
+        assertEquals(java.math.BigDecimal.valueOf(65.0), response.targetTemp());
+        assertEquals(java.math.BigDecimal.valueOf(0.3), response.hysteresis());
+    }
+
+    @Test
+    @DisplayName("Should update control policy")
+    void updateControlPolicy_success() {
+        Device device = sampleDevice(1L, "SV-001", true);
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(deviceRepository.save(any(Device.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DeviceControlPolicyResponse response = deviceService.updateControlPolicy(
+                1L,
+                java.math.BigDecimal.valueOf(64.5),
+                java.math.BigDecimal.valueOf(0.5)
+        );
+
+        assertEquals(java.math.BigDecimal.valueOf(64.5), response.targetTemp());
+        assertEquals(java.math.BigDecimal.valueOf(0.5), response.hysteresis());
+        verify(deviceRepository, times(1)).save(eq(device));
     }
 
     private Device sampleDevice(Long id, String deviceId, boolean enabled) {
