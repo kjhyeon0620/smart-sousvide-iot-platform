@@ -21,6 +21,7 @@ import com.iot.IoT.service.exception.DeviceCommandNotFoundException;
 import com.iot.IoT.service.exception.DeviceNotFoundException;
 import com.iot.IoT.service.exception.DuplicateDeviceException;
 import com.iot.IoT.service.exception.InvalidDeviceQueryException;
+import com.iot.IoT.service.metrics.DownlinkMetricsRecorder;
 import com.iot.IoT.watchdog.port.WatchdogStatePort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -56,6 +57,7 @@ public class DeviceServiceImpl implements DeviceService {
     private final WatchdogStatePort watchdogStatePort;
     private final TemperatureTimeSeriesQueryPort temperatureTimeSeriesQueryPort;
     private final DeviceCommandPublisherPort deviceCommandPublisherPort;
+    private final DownlinkMetricsRecorder downlinkMetricsRecorder;
     private final Duration heartbeatTtl;
     private final Duration commandRetryInterval;
     private final Duration commandAckTimeout;
@@ -67,6 +69,7 @@ public class DeviceServiceImpl implements DeviceService {
             WatchdogStatePort watchdogStatePort,
             TemperatureTimeSeriesQueryPort temperatureTimeSeriesQueryPort,
             DeviceCommandPublisherPort deviceCommandPublisherPort,
+            DownlinkMetricsRecorder downlinkMetricsRecorder,
             @Value("${ingestion.heartbeat-ttl-seconds:120}") long heartbeatTtlSeconds,
             @Value("${downlink.retry-interval-seconds:10}") long commandRetryIntervalSeconds,
             @Value("${downlink.ack-timeout-seconds:30}") long commandAckTimeoutSeconds,
@@ -77,6 +80,7 @@ public class DeviceServiceImpl implements DeviceService {
         this.watchdogStatePort = watchdogStatePort;
         this.temperatureTimeSeriesQueryPort = temperatureTimeSeriesQueryPort;
         this.deviceCommandPublisherPort = deviceCommandPublisherPort;
+        this.downlinkMetricsRecorder = downlinkMetricsRecorder;
         this.heartbeatTtl = Duration.ofSeconds(heartbeatTtlSeconds);
         this.commandRetryInterval = Duration.ofSeconds(commandRetryIntervalSeconds);
         this.commandAckTimeout = Duration.ofSeconds(commandAckTimeoutSeconds);
@@ -205,6 +209,7 @@ public class DeviceServiceImpl implements DeviceService {
                 idempotencyKey
         );
         if (existing.isPresent()) {
+            downlinkMetricsRecorder.recordIdempotencyHit();
             return toCommandResponse(existing.get());
         }
 
@@ -238,11 +243,13 @@ public class DeviceServiceImpl implements DeviceService {
             created.setSentAt(sentAt);
             created.setNextRetryAt(sentAt.plus(commandRetryInterval));
             created.setErrorMessage(null);
+            downlinkMetricsRecorder.recordSent();
         } catch (RuntimeException ex) {
             created.setStatus(DeviceCommandStatus.FAILED);
             created.setSentAt(null);
             created.setNextRetryAt(null);
             created.setErrorMessage(ex.getMessage());
+            downlinkMetricsRecorder.recordFailed();
         }
 
         DeviceCommand saved = deviceCommandRepository.save(created);
@@ -276,6 +283,7 @@ public class DeviceServiceImpl implements DeviceService {
             command.setNextRetryAt(null);
             command.setErrorMessage(null);
             command = deviceCommandRepository.save(command);
+            downlinkMetricsRecorder.recordAcked();
         }
         return toCommandResponse(command);
     }
@@ -296,6 +304,7 @@ public class DeviceServiceImpl implements DeviceService {
                 command.setNextRetryAt(null);
                 command.setErrorMessage("ack timeout expired");
                 deviceCommandRepository.save(command);
+                downlinkMetricsRecorder.recordExpired();
                 continue;
             }
             if (command.getStatus() == DeviceCommandStatus.PENDING) {
@@ -360,15 +369,19 @@ public class DeviceServiceImpl implements DeviceService {
             command.setRetryCount(command.getRetryCount() + 1);
             command.setNextRetryAt(now.plus(commandRetryInterval));
             command.setErrorMessage(null);
+            downlinkMetricsRecorder.recordRetried();
+            downlinkMetricsRecorder.recordSent();
         } catch (RuntimeException ex) {
             int nextRetry = command.getRetryCount() + 1;
             command.setRetryCount(nextRetry);
             if (nextRetry >= command.getMaxRetries()) {
                 command.setStatus(DeviceCommandStatus.FAILED);
                 command.setNextRetryAt(null);
+                downlinkMetricsRecorder.recordFailed();
             } else {
                 command.setStatus(DeviceCommandStatus.SENT);
                 command.setNextRetryAt(now.plus(commandRetryInterval));
+                downlinkMetricsRecorder.recordRetried();
             }
             command.setErrorMessage(ex.getMessage());
         }
