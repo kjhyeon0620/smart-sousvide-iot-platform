@@ -59,6 +59,8 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, times(0)).recordInfluxFailure();
         verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
         verify(ingestionMetricsCollector, times(0)).recordRedisFailure();
+        verify(ingestionMetricsCollector, times(1)).recordCorePipelineSuccess();
+        verify(ingestionMetricsCollector, times(1)).recordOverallPipelineSuccess();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
         verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
     }
@@ -77,6 +79,8 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, times(1)).recordInfluxFailure();
         verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
         verify(ingestionMetricsCollector, times(0)).recordRedisFailure();
+        verify(ingestionMetricsCollector, times(1)).recordCorePipelineSuccess();
+        verify(ingestionMetricsCollector, never()).recordOverallPipelineSuccess();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
         verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
     }
@@ -95,6 +99,8 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, times(0)).recordInfluxFailure();
         verify(ingestionMetricsCollector, times(0)).recordRedisSuccess();
         verify(ingestionMetricsCollector, times(1)).recordRedisFailure();
+        verify(ingestionMetricsCollector, never()).recordCorePipelineSuccess();
+        verify(ingestionMetricsCollector, never()).recordOverallPipelineSuccess();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
         verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
     }
@@ -114,6 +120,8 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, never()).recordInfluxFailure();
         verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
         verify(ingestionMetricsCollector, never()).recordRedisFailure();
+        verify(ingestionMetricsCollector, times(1)).recordCorePipelineSuccess();
+        verify(ingestionMetricsCollector, never()).recordOverallPipelineSuccess();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
         verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
     }
@@ -134,6 +142,8 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, never()).recordInfluxFailure();
         verify(ingestionMetricsCollector, never()).recordRedisSuccess();
         verify(ingestionMetricsCollector, times(1)).recordRedisFailure();
+        verify(ingestionMetricsCollector, never()).recordCorePipelineSuccess();
+        verify(ingestionMetricsCollector, never()).recordOverallPipelineSuccess();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
         verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
     }

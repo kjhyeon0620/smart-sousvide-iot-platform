@@ -31,6 +31,11 @@ curl -s http://localhost:8080/actuator/prometheus | rg "^iot\\."
   - `iot_ingestion_influx_bypass_total`
   - `iot_ingestion_redis_success_total`
   - `iot_ingestion_redis_failure_total`
+  - `iot_ingestion_processing_failure_total`
+  - `iot_ingestion_pipeline_overall_success_total`
+  - `iot_ingestion_pipeline_core_success_total`
+  - `iot_ingestion_inflight`
+  - `iot_ingestion_processing_latency_seconds`
 - Downlink:
   - `iot_downlink_command_sent_total`
   - `iot_downlink_command_failed_total`
@@ -42,6 +47,14 @@ curl -s http://localhost:8080/actuator/prometheus | rg "^iot\\."
 ## Common Tags
 - `application`: `${spring.application.name}`
 - `env`: `${APP_ENV:local}`
+
+## Phase 2 Notes
+- MQTT inbound channel은 executor 기반으로 분리되어 broker 수신 스레드와 downstream 처리 스레드를 느슨하게 분리한다.
+- business success 지표는 아래 두 축으로 본다.
+  - overall pipeline success: parse 이후 Influx + Redis가 모두 성공한 건수
+  - core pipeline success: parse 이후 Redis heartbeat까지 성공한 건수
+- `strict` 모드는 Influx write path를 포함한 전체 경로 검증용이다.
+- `bypass` 모드는 Influx 압력을 제외하고 parse + Redis + control path를 검증하기 위한 모드다.
 
 ## Grafana (Phase 7)
 - Dashboard JSON:

@@ -57,6 +57,16 @@
   - 자동 제어와 수동 제어 우선순위 정책
   - 장시간 대량 telemetry 환경에서 auto-control dedup window 튜닝
 
+## Phase 2 Update
+- 현재 구현 상태:
+  - MQTT inbound를 executor 기반으로 분리해 broker 수신 스레드와 downstream 처리 경로를 느슨하게 분리
+  - `overall/core pipeline success`, `processing failure`, `inflight`, processing latency 메트릭 추가
+  - control dispatch 예외가 ingestion 전체 실패로 번지지 않도록 격리
+- 남은 보강:
+  - 5k strict / bypass 재측정 결과 반영
+  - executor pool/queue 튜닝 근거 수치화
+  - backlog 발생 시 후속 큐 분리 전략(DLQ/replay 포함) 결정
+
 ## 5. Phase Details
 ## Phase 1: Device Management API
 - 목표:

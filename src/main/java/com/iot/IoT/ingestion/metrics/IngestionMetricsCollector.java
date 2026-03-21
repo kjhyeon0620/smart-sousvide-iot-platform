@@ -1,13 +1,17 @@
 package com.iot.IoT.ingestion.metrics;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -25,6 +29,10 @@ public class IngestionMetricsCollector {
     private final LongAdder influxBypassTotal = new LongAdder();
     private final LongAdder redisSuccessTotal = new LongAdder();
     private final LongAdder redisFailureTotal = new LongAdder();
+    private final LongAdder processingFailureTotal = new LongAdder();
+    private final LongAdder overallPipelineSuccessTotal = new LongAdder();
+    private final LongAdder corePipelineSuccessTotal = new LongAdder();
+    private final AtomicInteger inFlight = new AtomicInteger(0);
 
     private final AtomicLong lastMqttReceived = new AtomicLong(0);
     private final AtomicLong lastParseSuccess = new AtomicLong(0);
@@ -34,6 +42,9 @@ public class IngestionMetricsCollector {
     private final AtomicLong lastInfluxBypass = new AtomicLong(0);
     private final AtomicLong lastRedisSuccess = new AtomicLong(0);
     private final AtomicLong lastRedisFailure = new AtomicLong(0);
+    private final AtomicLong lastProcessingFailure = new AtomicLong(0);
+    private final AtomicLong lastOverallPipelineSuccess = new AtomicLong(0);
+    private final AtomicLong lastCorePipelineSuccess = new AtomicLong(0);
 
     private final Counter mqttReceivedCounter;
     private final Counter parseSuccessCounter;
@@ -43,6 +54,10 @@ public class IngestionMetricsCollector {
     private final Counter influxBypassCounter;
     private final Counter redisSuccessCounter;
     private final Counter redisFailureCounter;
+    private final Counter processingFailureCounter;
+    private final Counter overallPipelineSuccessCounter;
+    private final Counter corePipelineSuccessCounter;
+    private final Timer processingLatencyTimer;
 
     public IngestionMetricsCollector(MeterRegistry meterRegistry) {
         this.mqttReceivedCounter = meterRegistry.counter("iot.ingestion.mqtt.received.total");
@@ -53,6 +68,13 @@ public class IngestionMetricsCollector {
         this.influxBypassCounter = meterRegistry.counter("iot.ingestion.influx.bypass.total");
         this.redisSuccessCounter = meterRegistry.counter("iot.ingestion.redis.success.total");
         this.redisFailureCounter = meterRegistry.counter("iot.ingestion.redis.failure.total");
+        this.processingFailureCounter = meterRegistry.counter("iot.ingestion.processing.failure.total");
+        this.overallPipelineSuccessCounter = meterRegistry.counter("iot.ingestion.pipeline.overall.success.total");
+        this.corePipelineSuccessCounter = meterRegistry.counter("iot.ingestion.pipeline.core.success.total");
+        this.processingLatencyTimer = meterRegistry.timer("iot.ingestion.processing.latency");
+        Gauge.builder("iot.ingestion.inflight", inFlight, AtomicInteger::get)
+                .description("Current number of in-flight ingestion tasks")
+                .register(meterRegistry);
     }
 
     public void recordMqttReceived() {
@@ -95,6 +117,35 @@ public class IngestionMetricsCollector {
         redisFailureCounter.increment();
     }
 
+    public void recordProcessingFailure() {
+        processingFailureTotal.increment();
+        processingFailureCounter.increment();
+    }
+
+    public void recordOverallPipelineSuccess() {
+        overallPipelineSuccessTotal.increment();
+        overallPipelineSuccessCounter.increment();
+    }
+
+    public void recordCorePipelineSuccess() {
+        corePipelineSuccessTotal.increment();
+        corePipelineSuccessCounter.increment();
+    }
+
+    public void incrementInFlight() {
+        inFlight.incrementAndGet();
+    }
+
+    public void decrementInFlight() {
+        inFlight.updateAndGet(current -> Math.max(current - 1, 0));
+    }
+
+    public void recordProcessingLatency(long nanos) {
+        if (nanos > 0) {
+            processingLatencyTimer.record(Duration.ofNanos(nanos));
+        }
+    }
+
     @Scheduled(fixedDelayString = "${ingestion.metrics-log-interval-ms:1000}")
     public void logSnapshot() {
         long mqttReceived = mqttReceivedTotal.sum();
@@ -105,6 +156,9 @@ public class IngestionMetricsCollector {
         long influxBypass = influxBypassTotal.sum();
         long redisSuccess = redisSuccessTotal.sum();
         long redisFailure = redisFailureTotal.sum();
+        long processingFailure = processingFailureTotal.sum();
+        long overallPipelineSuccess = overallPipelineSuccessTotal.sum();
+        long corePipelineSuccess = corePipelineSuccessTotal.sum();
 
         long mqttReceivedDelta = mqttReceived - lastMqttReceived.getAndSet(mqttReceived);
         long parseSuccessDelta = parseSuccess - lastParseSuccess.getAndSet(parseSuccess);
@@ -114,6 +168,11 @@ public class IngestionMetricsCollector {
         long influxBypassDelta = influxBypass - lastInfluxBypass.getAndSet(influxBypass);
         long redisSuccessDelta = redisSuccess - lastRedisSuccess.getAndSet(redisSuccess);
         long redisFailureDelta = redisFailure - lastRedisFailure.getAndSet(redisFailure);
+        long processingFailureDelta = processingFailure - lastProcessingFailure.getAndSet(processingFailure);
+        long overallPipelineSuccessDelta =
+                overallPipelineSuccess - lastOverallPipelineSuccess.getAndSet(overallPipelineSuccess);
+        long corePipelineSuccessDelta =
+                corePipelineSuccess - lastCorePipelineSuccess.getAndSet(corePipelineSuccess);
 
         if (mqttReceivedDelta == 0
                 && parseSuccessDelta == 0
@@ -122,11 +181,14 @@ public class IngestionMetricsCollector {
                 && influxFailureDelta == 0
                 && influxBypassDelta == 0
                 && redisSuccessDelta == 0
-                && redisFailureDelta == 0) {
+                && redisFailureDelta == 0
+                && processingFailureDelta == 0
+                && overallPipelineSuccessDelta == 0
+                && corePipelineSuccessDelta == 0) {
             return;
         }
 
-        log.info("[INGEST-METRICS/1s] recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, influxBypass={}, redisOk={}, redisFail={} | totals recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, influxBypass={}, redisOk={}, redisFail={}",
+        log.info("[INGEST-METRICS/1s] recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, influxBypass={}, redisOk={}, redisFail={}, procFail={}, overallOk={}, coreOk={}, inFlight={} | totals recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, influxBypass={}, redisOk={}, redisFail={}, procFail={}, overallOk={}, coreOk={}",
                 mqttReceivedDelta,
                 parseSuccessDelta,
                 parseFailureDelta,
@@ -135,6 +197,10 @@ public class IngestionMetricsCollector {
                 influxBypassDelta,
                 redisSuccessDelta,
                 redisFailureDelta,
+                processingFailureDelta,
+                overallPipelineSuccessDelta,
+                corePipelineSuccessDelta,
+                inFlight.get(),
                 mqttReceived,
                 parseSuccess,
                 parseFailure,
@@ -142,6 +208,9 @@ public class IngestionMetricsCollector {
                 influxFailure,
                 influxBypass,
                 redisSuccess,
-                redisFailure);
+                redisFailure,
+                processingFailure,
+                overallPipelineSuccess,
+                corePipelineSuccess);
     }
 }
