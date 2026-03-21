@@ -6,6 +6,7 @@ import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
 import com.iot.IoT.ingestion.metrics.IngestionMetricsCollector;
 import com.iot.IoT.ingestion.port.HeartbeatPort;
 import com.iot.IoT.ingestion.port.TemperatureTimeSeriesPort;
+import com.iot.IoT.service.DeviceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +24,7 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
     private final HeartbeatPort heartbeatPort;
     private final ControlDecisionEngine controlDecisionEngine;
     private final IngestionMetricsCollector ingestionMetricsCollector;
+    private final DeviceService deviceService;
     private final String influxWriteMode;
 
     public DeviceIngestionServiceImpl(
@@ -30,12 +32,14 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
             HeartbeatPort heartbeatPort,
             ControlDecisionEngine controlDecisionEngine,
             IngestionMetricsCollector ingestionMetricsCollector,
+            DeviceService deviceService,
             @Value("${ingestion.influx.write-mode:strict}") String influxWriteMode
     ) {
         this.temperatureTimeSeriesPort = temperatureTimeSeriesPort;
         this.heartbeatPort = heartbeatPort;
         this.controlDecisionEngine = controlDecisionEngine;
         this.ingestionMetricsCollector = ingestionMetricsCollector;
+        this.deviceService = deviceService;
         this.influxWriteMode = influxWriteMode;
     }
 
@@ -75,6 +79,7 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
                 message.targetTemp(),
                 message.state(),
                 action);
+        deviceService.sendAutoControlCommand(message.deviceId(), action, now);
     }
 
     private boolean isInfluxWriteBypassMode() {

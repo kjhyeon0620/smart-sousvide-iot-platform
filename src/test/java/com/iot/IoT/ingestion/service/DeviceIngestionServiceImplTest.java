@@ -6,6 +6,8 @@ import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
 import com.iot.IoT.ingestion.metrics.IngestionMetricsCollector;
 import com.iot.IoT.ingestion.port.HeartbeatPort;
 import com.iot.IoT.ingestion.port.TemperatureTimeSeriesPort;
+import com.iot.IoT.control.ControlAction;
+import com.iot.IoT.service.DeviceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class DeviceIngestionServiceImplTest {
 
@@ -29,6 +32,7 @@ class DeviceIngestionServiceImplTest {
     private HeartbeatPort heartbeatPort;
     private ControlDecisionEngine controlDecisionEngine;
     private IngestionMetricsCollector ingestionMetricsCollector;
+    private DeviceService deviceService;
     private DeviceIngestionServiceImpl service;
 
     @BeforeEach
@@ -37,7 +41,9 @@ class DeviceIngestionServiceImplTest {
         heartbeatPort = Mockito.mock(HeartbeatPort.class);
         controlDecisionEngine = Mockito.mock(ControlDecisionEngine.class);
         ingestionMetricsCollector = Mockito.mock(IngestionMetricsCollector.class);
+        deviceService = Mockito.mock(DeviceService.class);
         service = createService(INFLUX_MODE_STRICT);
+        when(controlDecisionEngine.decide(any())).thenReturn(ControlAction.HEAT_ON);
     }
 
     @Test
@@ -54,6 +60,7 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
         verify(ingestionMetricsCollector, times(0)).recordRedisFailure();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
+        verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
     }
 
     @Test
@@ -71,6 +78,7 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
         verify(ingestionMetricsCollector, times(0)).recordRedisFailure();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
+        verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
     }
 
     @Test
@@ -88,6 +96,7 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, times(0)).recordRedisSuccess();
         verify(ingestionMetricsCollector, times(1)).recordRedisFailure();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
+        verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
     }
 
     @Test
@@ -106,6 +115,7 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
         verify(ingestionMetricsCollector, never()).recordRedisFailure();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
+        verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
     }
 
     @Test
@@ -125,6 +135,7 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, never()).recordRedisSuccess();
         verify(ingestionMetricsCollector, times(1)).recordRedisFailure();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
+        verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
     }
 
     private DeviceStatusMessage sampleMessage() {
@@ -142,6 +153,7 @@ class DeviceIngestionServiceImplTest {
                 heartbeatPort,
                 controlDecisionEngine,
                 ingestionMetricsCollector,
+                deviceService,
                 influxWriteMode
         );
     }

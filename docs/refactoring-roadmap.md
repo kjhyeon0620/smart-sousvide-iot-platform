@@ -46,6 +46,17 @@
 3. Observability Standardization
 4. Queue-based Decoupling (Kafka/RabbitMQ + DLQ)
 
+## Phase 1 Update
+- 현재 구현 상태:
+  - telemetry -> control decision -> auto downlink command 연결
+  - `HOLD` 미발행 정책
+  - enabled device 대상 자동 발행
+  - 시간 버킷 기반 idempotency key로 중복 발행 억제
+- 남은 보강:
+  - device ACK topic/payload 표준화
+  - 자동 제어와 수동 제어 우선순위 정책
+  - 장시간 대량 telemetry 환경에서 auto-control dedup window 튜닝
+
 ## 5. Phase Details
 ## Phase 1: Device Management API
 - 목표:

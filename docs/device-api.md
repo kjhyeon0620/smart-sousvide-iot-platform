@@ -198,6 +198,15 @@
   - `retry-interval`: `10s` (기본값)
   - `max-retries`: `3` (기본값)
 
+## Auto Control Notes (Phase 1)
+- telemetry ingestion 경로에서 제어 판단 결과가 자동 downlink command로 연결된다.
+- 자동 발행 규칙:
+  - `HOLD`는 발행하지 않는다.
+  - 등록되고 `enabled=true`인 디바이스만 자동 발행 대상이다.
+  - 중복 발행 방지를 위해 시간 버킷 기반 idempotency key를 사용한다.
+- 자동 발행 key 예시:
+  - `auto:SV-001:HEAT_ON:<bucket>`
+
 ## Error Response Contract
 ```json
 {

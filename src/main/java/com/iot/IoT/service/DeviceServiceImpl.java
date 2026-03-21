@@ -61,6 +61,7 @@ public class DeviceServiceImpl implements DeviceService {
     private final Duration heartbeatTtl;
     private final Duration commandRetryInterval;
     private final Duration commandAckTimeout;
+    private final Duration autoControlDedupWindow;
     private final int commandMaxRetries;
 
     public DeviceServiceImpl(
@@ -73,6 +74,7 @@ public class DeviceServiceImpl implements DeviceService {
             @Value("${ingestion.heartbeat-ttl-seconds:120}") long heartbeatTtlSeconds,
             @Value("${downlink.retry-interval-seconds:10}") long commandRetryIntervalSeconds,
             @Value("${downlink.ack-timeout-seconds:30}") long commandAckTimeoutSeconds,
+            @Value("${control.auto-command-dedup-window-seconds:30}") long autoControlDedupWindowSeconds,
             @Value("${downlink.max-retries:3}") int commandMaxRetries
     ) {
         this.deviceRepository = deviceRepository;
@@ -84,6 +86,7 @@ public class DeviceServiceImpl implements DeviceService {
         this.heartbeatTtl = Duration.ofSeconds(heartbeatTtlSeconds);
         this.commandRetryInterval = Duration.ofSeconds(commandRetryIntervalSeconds);
         this.commandAckTimeout = Duration.ofSeconds(commandAckTimeoutSeconds);
+        this.autoControlDedupWindow = Duration.ofSeconds(Math.max(autoControlDedupWindowSeconds, 1));
         this.commandMaxRetries = Math.max(commandMaxRetries, 0);
     }
 
@@ -290,6 +293,27 @@ public class DeviceServiceImpl implements DeviceService {
 
     @Override
     @Transactional
+    public void sendAutoControlCommand(String deviceId, ControlAction commandType, Instant decidedAt) {
+        if (commandType == ControlAction.HOLD) {
+            return;
+        }
+
+        String normalizedDeviceId = normalize(deviceId);
+        if (normalizedDeviceId == null || normalizedDeviceId.isBlank()) {
+            return;
+        }
+
+        Optional<Device> device = deviceRepository.findByDeviceId(normalizedDeviceId);
+        if (device.isEmpty() || !device.get().isEnabled()) {
+            return;
+        }
+
+        String idempotencyKey = buildAutoControlIdempotencyKey(normalizedDeviceId, commandType, decidedAt);
+        sendCommand(device.get().getId(), commandType, idempotencyKey);
+    }
+
+    @Override
+    @Transactional
     public void processCommandReliability() {
         Instant now = Instant.now();
         List<DeviceCommand> targets = deviceCommandRepository.findByStatusIn(RELIABILITY_TARGET_STATUSES);
@@ -444,6 +468,11 @@ public class DeviceServiceImpl implements DeviceService {
         return """
                 {"commandId":%d,"commandType":"%s","requestedAt":"%s"}
                 """.formatted(commandId, commandType.name(), requestedAt.toString()).trim();
+    }
+
+    private String buildAutoControlIdempotencyKey(String deviceId, ControlAction commandType, Instant decidedAt) {
+        long dedupBucket = decidedAt.toEpochMilli() / autoControlDedupWindow.toMillis();
+        return "auto:%s:%s:%d".formatted(deviceId, commandType.name(), dedupBucket);
     }
 
     private Range resolveRange(Instant from, Instant to) {

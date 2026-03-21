@@ -37,5 +37,7 @@ public interface DeviceService {
 
     DeviceCommandResponse acknowledgeCommand(Long id, Long commandId);
 
+    void sendAutoControlCommand(String deviceId, ControlAction commandType, Instant decidedAt);
+
     void processCommandReliability();
 }

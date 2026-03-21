@@ -74,6 +74,7 @@ class DeviceServiceImplTest {
                 120,
                 10,
                 30,
+                30,
                 3
         );
     }
@@ -395,6 +396,63 @@ class DeviceServiceImplTest {
         when(deviceCommandRepository.findByIdAndDevicePk(12L, 1L)).thenReturn(Optional.empty());
 
         assertThrows(DeviceCommandNotFoundException.class, () -> deviceService.acknowledgeCommand(1L, 12L));
+    }
+
+    @Test
+    @DisplayName("Should publish auto control command for enabled device")
+    void sendAutoControlCommand_enabledDevice() {
+        Device device = sampleDevice(1L, "SV-001", true);
+        when(deviceRepository.findByDeviceId("SV-001")).thenReturn(Optional.of(device));
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(deviceCommandRepository.findByDevicePkAndIdempotencyKey(eq(1L), any())).thenReturn(Optional.empty());
+        when(deviceCommandRepository.save(any(DeviceCommand.class)))
+                .thenAnswer(invocation -> {
+                    DeviceCommand command = invocation.getArgument(0);
+                    if (command.getId() == null) {
+                        setId(command, 21L);
+                    }
+                    if (command.getRequestedAt() == null) {
+                        command.setRequestedAt(Instant.parse("2026-03-02T00:00:00Z"));
+                    }
+                    return command;
+                });
+
+        deviceService.sendAutoControlCommand(
+                "SV-001",
+                ControlAction.HEAT_ON,
+                Instant.parse("2026-03-02T00:00:05Z")
+        );
+
+        verify(deviceCommandPublisherPort, times(1)).publish(eq("devices/SV-001/cmd"), any(String.class));
+    }
+
+    @Test
+    @DisplayName("Should skip auto control command for disabled device")
+    void sendAutoControlCommand_disabledDevice() {
+        Device device = sampleDevice(1L, "SV-001", false);
+        when(deviceRepository.findByDeviceId("SV-001")).thenReturn(Optional.of(device));
+
+        deviceService.sendAutoControlCommand(
+                "SV-001",
+                ControlAction.HEAT_ON,
+                Instant.parse("2026-03-02T00:00:05Z")
+        );
+
+        verify(deviceCommandPublisherPort, never()).publish(any(String.class), any(String.class));
+        verify(deviceCommandRepository, never()).save(any(DeviceCommand.class));
+    }
+
+    @Test
+    @DisplayName("Should skip auto control hold action")
+    void sendAutoControlCommand_holdAction() {
+        deviceService.sendAutoControlCommand(
+                "SV-001",
+                ControlAction.HOLD,
+                Instant.parse("2026-03-02T00:00:05Z")
+        );
+
+        verify(deviceRepository, never()).findByDeviceId(any());
+        verify(deviceCommandPublisherPort, never()).publish(any(String.class), any(String.class));
     }
 
     @Test
