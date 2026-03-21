@@ -26,3 +26,15 @@ Accepted
 - 실패 메시지 전용 채널/재처리 정책 도입
 - QoS/재전송 정책 및 idempotency 키 설계
 - 10k 시뮬레이터 기반 부하 테스트 시나리오 정교화
+
+## Reliability Policy Addendum (Phase 3)
+- uplink duplicate suppression은 `deviceId + rawPayload` 기준의 short-window best-effort 정책으로 처리한다.
+  - 목적: broker/network 재전송으로 인한 즉시 중복 유입 억제
+  - 한계: semantic dedup이 아니라 transport-level suppression에 가깝다.
+- failure classification:
+  - parse invalid / validation failed: non-replayable, dead-letter 대상
+  - Influx/Redis storage failure: replay candidate
+  - control dispatch failure: replay candidate
+- replay policy:
+  - parse invalid payload는 자동 재처리하지 않는다.
+  - storage/control failure는 replayable failure로 계수하고 후속 retry/DLQ 체계의 입력으로 사용한다.

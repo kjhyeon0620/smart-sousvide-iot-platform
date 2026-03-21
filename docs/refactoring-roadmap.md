@@ -67,6 +67,16 @@
   - executor pool/queue 튜닝 근거 수치화
   - backlog 발생 시 후속 큐 분리 전략(DLQ/replay 포함) 결정
 
+## Phase 3 Update
+- 현재 구현 상태:
+  - best-effort uplink duplicate suppression 추가
+  - parse invalid / storage failure / control dispatch failure를 서로 다른 reliability class로 분류
+  - dead-letter candidate와 replay candidate를 메트릭/로그로 구분
+- 남은 보강:
+  - persistent DLQ 도입
+  - replay 실행 경로 구현
+  - duplicate suppression을 timestamp/sequence 기반 정책으로 고도화
+
 ## 5. Phase Details
 ## Phase 1: Device Management API
 - 목표:

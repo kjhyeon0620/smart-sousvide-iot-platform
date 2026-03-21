@@ -77,6 +77,7 @@ class DeviceIngestionServiceImplTest {
         verify(heartbeatPort, times(1)).updateLastSeen(eq("SV-001"), any());
         verify(ingestionMetricsCollector, times(0)).recordInfluxSuccess();
         verify(ingestionMetricsCollector, times(1)).recordInfluxFailure();
+        verify(ingestionMetricsCollector, times(1)).recordStorageReplayCandidate();
         verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
         verify(ingestionMetricsCollector, times(0)).recordRedisFailure();
         verify(ingestionMetricsCollector, times(1)).recordCorePipelineSuccess();
@@ -99,6 +100,7 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, times(0)).recordInfluxFailure();
         verify(ingestionMetricsCollector, times(0)).recordRedisSuccess();
         verify(ingestionMetricsCollector, times(1)).recordRedisFailure();
+        verify(ingestionMetricsCollector, times(1)).recordStorageReplayCandidate();
         verify(ingestionMetricsCollector, never()).recordCorePipelineSuccess();
         verify(ingestionMetricsCollector, never()).recordOverallPipelineSuccess();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
@@ -146,6 +148,21 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, never()).recordOverallPipelineSuccess();
         verify(controlDecisionEngine, times(1)).decide(eq(message));
         verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
+    }
+
+    @Test
+    @DisplayName("Should classify control dispatch failure as replay candidate")
+    void ingest_controlDispatchFails_replayCandidate() {
+        DeviceStatusMessage message = sampleMessage();
+        doThrow(new RuntimeException("publish down")).when(deviceService).sendAutoControlCommand(eq("SV-001"), any(), any());
+
+        service.ingest(message);
+
+        verify(ingestionMetricsCollector, times(1)).recordInfluxSuccess();
+        verify(ingestionMetricsCollector, times(1)).recordRedisSuccess();
+        verify(ingestionMetricsCollector, times(1)).recordCorePipelineSuccess();
+        verify(ingestionMetricsCollector, times(1)).recordOverallPipelineSuccess();
+        verify(ingestionMetricsCollector, times(1)).recordControlReplayCandidate();
     }
 
     private DeviceStatusMessage sampleMessage() {

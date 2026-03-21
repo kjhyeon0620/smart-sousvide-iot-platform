@@ -22,6 +22,9 @@
 - `influx failure ratio` 상승 시 Influx 연결/토큰/지연 점검
 - `redis failure ratio` 상승 시 Redis 연결/메모리 점검
 - `processing failure ratio` 상승 시 애플리케이션 내부 예외 또는 executor backlog 의심
+- `parse dead-letter` 증가 시 non-replayable payload 오류로 분류
+- `storage replay candidate` 증가 시 Influx/Redis 복구 후 재처리 후보 증가로 해석
+- `control replay candidate` 증가 시 downlink publish/ACK 경로 점검 우선
 
 3. Ingestion Pipeline Success 확인
 - `overall pipeline success`가 하락하면 Influx 또는 Redis 경로를 우선 의심
@@ -46,6 +49,7 @@
   - 배포 직후 발생인지 확인
 - 조치:
   - 파서 유효성 규칙과 송신 포맷 동기화
+  - `parse dead-letter`를 non-replayable failure로 분류하고 자동 재처리는 수행하지 않음
 
 ### 2) Downlink Timeout 급증
 - 증상: `timeout ratio` 상승, `acked ratio` 하락
@@ -76,11 +80,22 @@
   - 우선 bypass 모드로 core path를 분리 검증
   - Influx 연결/토큰/스토리지 상태 복구 후 strict 재검증
 
+### 5) Replay Candidate 증가
+- 증상: `storage replay candidate` 또는 `control replay candidate` 증가
+- 점검:
+  - Influx/Redis/broker 상태
+  - 최근 deploy 이후 예외 패턴 변화
+  - duplicate suppression 증가 여부와 동반되는지 확인
+- 조치:
+  - parse invalid는 재처리하지 않음
+  - storage/control failure는 복구 후 재처리 대상 후보로 별도 취급
+
 ## Suggested Thresholds (Initial)
 - parse failure ratio: `> 0.01` (1%)
 - timeout ratio: `> 0.05` (5%)
 - downlink failed/s: 평시 대비 3배 이상
 - inflight: 지속 증가 추세면 backlog 의심
+- duplicate dropped/s: 평시 대비 급증 시 broker/network duplicate 여부 확인
 
 ## Related Docs
 - `docs/observability.md`

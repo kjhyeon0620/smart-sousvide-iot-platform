@@ -30,7 +30,11 @@ public class MqttPayloadParser {
             validate(message);
             return message;
         } catch (JsonProcessingException e) {
-            throw new InvalidMqttPayloadException("MQTT payload is not valid JSON for DeviceStatusMessage", e);
+            throw new InvalidMqttPayloadException(
+                    "MQTT payload is not valid JSON for DeviceStatusMessage",
+                    e,
+                    InvalidMqttPayloadException.FailureType.INVALID_JSON
+            );
         }
     }
 
@@ -40,7 +44,10 @@ public class MqttPayloadParser {
             String details = violations.stream()
                     .map(v -> v.getPropertyPath() + " " + v.getMessage())
                     .collect(Collectors.joining(", "));
-            throw new InvalidMqttPayloadException("MQTT payload validation failed: " + details);
+            throw new InvalidMqttPayloadException(
+                    "MQTT payload validation failed: " + details,
+                    InvalidMqttPayloadException.FailureType.VALIDATION_FAILED
+            );
         }
     }
 }
