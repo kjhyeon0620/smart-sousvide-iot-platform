@@ -53,3 +53,16 @@ curl -s http://localhost:8080/actuator/prometheus | rg "^iot\\."
 1. Grafana > Dashboards > Import
 2. `docs/grafana-observability-dashboard.json` 업로드
 3. datasource 변수(`DS_PROMETHEUS`)를 Prometheus에 매핑
+
+## Docker Compose Quick Start
+1. 인프라 기동
+```bash
+docker compose up -d
+```
+2. 애플리케이션 실행 (`localhost:8080`)
+3. Prometheus 확인:
+   - `http://localhost:9090/targets`
+   - `iot-backend` target이 `UP` 상태인지 확인
+4. Grafana 확인:
+   - `http://localhost:3000` (`admin` / `admin`)
+   - `IoT` 폴더에 대시보드가 자동 로드됨

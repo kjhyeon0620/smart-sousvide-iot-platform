@@ -1,5 +1,9 @@
 # Device Management API (Foundation)
 
+## Swagger
+- UI: `GET /swagger-ui.html`
+- OpenAPI JSON: `GET /v3/api-docs`
+
 ## Purpose
 - 디바이스 관리 기능의 기본 골격을 제공한다.
 - 이후 상태 조회 확장, 다운링크 제어, 운영 정책 API의 기반으로 사용한다.
