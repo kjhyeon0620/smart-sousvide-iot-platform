@@ -25,6 +25,7 @@ services:
       - DOCKER_INFLUXDB_INIT_PASSWORD=adminpassword
       - DOCKER_INFLUXDB_INIT_ORG=myorg
       - DOCKER_INFLUXDB_INIT_BUCKET=sousvide_bucket
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=my-super-secret-auth-token
     volumes:
       - ./data/influxdb2:/var/lib/influxdb2
     networks:
@@ -56,6 +57,43 @@ services:
     networks:
       - iot-network
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # 5. Prometheus (Metrics Scraping)
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: smart-sousvide-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./data/prometheus:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - iot-network
+
+  # 6. Grafana (Dashboard)
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: smart-sousvide-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docs/grafana-observability-dashboard.json:/var/lib/grafana/dashboards/iot-observability.json:ro
+    depends_on:
+      - prometheus
+    networks:
+      - iot-network
 
 networks:
   iot-network:

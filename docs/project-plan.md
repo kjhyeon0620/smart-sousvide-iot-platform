@@ -137,3 +137,32 @@
 - 판단 원칙:
   - 단기(포트폴리오 임팩트): API/운영성/관측성 고도화
   - 중기(규모 확장): 메시지 큐 기반 비동기 분리 및 재처리 체계
+
+## 12. Current Execution Plan (2026-03-03)
+- 아래 순서로 제품형 API를 확장한다.
+1. CookSession 도메인 분리 + 상태머신 API(start/pause/resume/stop)
+2. DeviceOwnership + JWT 기반 권한(내 디바이스만 접근)
+3. Influx fallback + readiness 강화(401/timeout 대응)
+4. Command scheduler scan 최적화(nextRetryAt 인덱스 중심)
+5. 알림(Webhook 우선, 이후 Push)
+
+- 보류/후순위:
+1. 심부온도 예측의 정확도 마케팅
+2. 커뮤니티/소셜 대규모 기능
+3. 마이크로서비스 분리
+
+## 13. Documentation Synchronization Rules
+- 구현 완료 시 문서 동기화는 선택이 아니라 완료 조건(DoD)이다.
+- 코드만 변경되고 문서가 비어 있으면 작업이 완료된 것으로 보지 않는다.
+- 기본 반영 체크리스트:
+1. API/스키마 변경: `docs/device-api.md`, `docs/swagger.md`
+2. 운영/장애 대응 변경: `docs/operations-runbook.md`, `docs/observability.md`
+3. 우선순위/아키텍처 결정 변경: `docs/project-plan.md`, `docs/refactoring-roadmap.md`
+
+## 14. WSL/Windows Worktree Operational Note
+- WSL/Windows 파일시스템 차이로 작업 범위와 무관한 변경 표시가 발생할 수 있다.
+- 이 경우 실제 작업 통제는 다음으로 수행한다.
+1. 이슈 브랜치 고정
+2. PR 허용 파일 목록 명시
+3. `scripts/dev/pr-guard.sh <allowed-files...>` 통과
+4. 커밋 전 staged 파일 목록 검증
