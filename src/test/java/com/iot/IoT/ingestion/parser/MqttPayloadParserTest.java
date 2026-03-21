@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MqttPayloadParserTest {
@@ -44,7 +45,11 @@ class MqttPayloadParserTest {
     void parseDeviceStatus_missingField() {
         String payload = "{\"deviceId\":\"SV-001\",\"temp\":65.5,\"state\":\"HEATING\"}";
 
-        assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
+        InvalidMqttPayloadException exception =
+                assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
+
+        assertEquals(InvalidMqttPayloadException.FailureType.VALIDATION_FAILED, exception.failureType());
+        assertFalse(exception.failureType().replayable());
     }
 
     @Test
@@ -52,7 +57,11 @@ class MqttPayloadParserTest {
     void parseDeviceStatus_unknownEnum() {
         String payload = "{\"deviceId\":\"SV-001\",\"temp\":65.5,\"targetTemp\":70.0,\"state\":\"RUNNING\"}";
 
-        assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
+        InvalidMqttPayloadException exception =
+                assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
+
+        assertEquals(InvalidMqttPayloadException.FailureType.INVALID_JSON, exception.failureType());
+        assertFalse(exception.failureType().replayable());
     }
 
     @Test
@@ -60,7 +69,11 @@ class MqttPayloadParserTest {
     void parseDeviceStatus_invalidNumberType() {
         String payload = "{\"deviceId\":\"SV-001\",\"temp\":\"hot\",\"targetTemp\":70.0,\"state\":\"HEATING\"}";
 
-        assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
+        InvalidMqttPayloadException exception =
+                assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
+
+        assertEquals(InvalidMqttPayloadException.FailureType.INVALID_JSON, exception.failureType());
+        assertFalse(exception.failureType().replayable());
     }
 
     @Test
@@ -68,6 +81,10 @@ class MqttPayloadParserTest {
     void parseDeviceStatus_unknownField() {
         String payload = "{\"deviceId\":\"SV-001\",\"temp\":65.5,\"targetTemp\":70.0,\"state\":\"HEATING\",\"foo\":\"bar\"}";
 
-        assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
+        InvalidMqttPayloadException exception =
+                assertThrows(InvalidMqttPayloadException.class, () -> parser.parseDeviceStatus(payload));
+
+        assertEquals(InvalidMqttPayloadException.FailureType.INVALID_JSON, exception.failureType());
+        assertFalse(exception.failureType().replayable());
     }
 }

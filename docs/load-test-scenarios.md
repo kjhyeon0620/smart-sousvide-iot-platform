@@ -149,6 +149,10 @@ Interpretation note:
 Definition notes:
 - DLQ-ready: parse/storage failures can be separated and counted independently.
 - Idempotency policy: `deviceId + timestamp(or sequence)` key strategy documented and testable.
+- Current Phase 3 local policy:
+  - best-effort duplicate suppression uses `deviceId + rawPayload` within a short time window
+  - parse invalid payloads are classified as non-replayable dead-letter candidates
+  - storage/control failures are classified as replay candidates
 
 ## Performance Methodology
 - Separate metrics into:
@@ -168,6 +172,12 @@ Definition notes:
   - failure signature
   - service behavior (degrade/recover)
   - MTTR measurement
+
+## Phase 3 Reliability Metrics
+- `iot_ingestion_duplicate_dropped_total`
+- `iot_ingestion_parse_dead_letter_total`
+- `iot_ingestion_storage_replay_candidate_total`
+- `iot_ingestion_control_replay_candidate_total`
 
 ## Security and Financial-Grade Readiness
 - Add and track minimum controls:

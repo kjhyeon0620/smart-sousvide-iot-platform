@@ -58,12 +58,15 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
                 ingestionMetricsCollector.recordInfluxSuccess();
             } catch (Exception e) {
                 ingestionMetricsCollector.recordInfluxFailure();
+                ingestionMetricsCollector.recordStorageReplayCandidate();
                 log.error("[INGESTION] Influx write failed. deviceId={}, temp={}, targetTemp={}, state={}",
                         message.deviceId(),
                         message.temp(),
                         message.targetTemp(),
                         message.state(),
                         e);
+                log.error("[RELIABILITY] Storage failure classified. store=INFLUX, deviceId={}, replayable=true",
+                        message.deviceId(), e);
             }
         }
 
@@ -73,7 +76,10 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
             ingestionMetricsCollector.recordRedisSuccess();
         } catch (Exception e) {
             ingestionMetricsCollector.recordRedisFailure();
+            ingestionMetricsCollector.recordStorageReplayCandidate();
             log.error("[INGESTION] Redis heartbeat update failed. deviceId={}", message.deviceId(), e);
+            log.error("[RELIABILITY] Storage failure classified. store=REDIS, deviceId={}, replayable=true",
+                    message.deviceId(), e);
         }
 
         if (redisUpdated) {
@@ -93,7 +99,10 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
                     action);
             deviceService.sendAutoControlCommand(message.deviceId(), action, now);
         } catch (RuntimeException ex) {
+            ingestionMetricsCollector.recordControlReplayCandidate();
             log.error("[CONTROL] Auto control dispatch failed. deviceId={}", message.deviceId(), ex);
+            log.error("[RELIABILITY] Control dispatch failure classified. deviceId={}, replayable=true",
+                    message.deviceId(), ex);
         }
     }
 
