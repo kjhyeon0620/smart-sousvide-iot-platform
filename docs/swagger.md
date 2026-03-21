@@ -20,3 +20,4 @@
 ## Notes
 - Actuator endpoint는 `device-api` 그룹에 포함되지 않는다.
 - 실제 데이터 검증은 `docs/device-api.md`와 함께 사용한다.
+- 프로젝트 개요와 실행 흐름은 루트 `README.md`를 기준으로 확인한다.

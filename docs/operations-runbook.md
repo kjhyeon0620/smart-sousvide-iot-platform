@@ -1,4 +1,4 @@
-# Operations Runbook (Phase 7)
+# Operations Runbook
 
 ## Purpose
 - Grafana 대시보드를 기준으로 ingestion/downlink 이상 징후를 빠르게 분류하고 대응한다.
@@ -98,5 +98,6 @@
 - duplicate dropped/s: 평시 대비 급증 시 broker/network duplicate 여부 확인
 
 ## Related Docs
+- `README.md`
 - `docs/observability.md`
 - `docs/device-api.md`
