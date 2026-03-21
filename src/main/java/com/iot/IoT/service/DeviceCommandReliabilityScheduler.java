@@ -6,14 +6,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class DeviceCommandReliabilityScheduler {
 
-    private final DeviceService deviceService;
+    private final DeviceCommandReliabilityService deviceCommandReliabilityService;
 
-    public DeviceCommandReliabilityScheduler(DeviceService deviceService) {
-        this.deviceService = deviceService;
+    public DeviceCommandReliabilityScheduler(DeviceCommandReliabilityService deviceCommandReliabilityService) {
+        this.deviceCommandReliabilityService = deviceCommandReliabilityService;
     }
 
     @Scheduled(fixedDelayString = "${downlink.reliability.scan-interval-ms:5000}")
     public void scanAndProcess() {
-        deviceService.processCommandReliability();
+        deviceCommandReliabilityService.processCommandReliability();
     }
 }
