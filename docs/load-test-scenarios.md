@@ -12,6 +12,9 @@ Run with at least Mosquitto up:
 - Use `scripts/loadtest/run-distributed.sh`.
 - Script does one-time runtime preparation, then runs each partition via direct `java -cp ...` execution.
 - This avoids per-partition Gradle startup overhead.
+- Backend Phase 2 baseline:
+  - MQTT inbound uses executor-backed channel instead of single-thread handoff.
+  - Observe `inflight`, `processing_latency`, `overall/core pipeline success` together.
 
 ## Common Arguments
 ```bash
@@ -108,6 +111,9 @@ Expected artifacts:
 - `redis_ok_total`, `redis_fail_total`
 - `pipeline_success_total` (overall)
 - `core_pipeline_success_total` (parse+redis)
+- `processing_failure_total`
+- `inflight` peak
+- processing latency (`p95` when available)
 - per-part logs: `docs/loadtest-runs/<run-id>/attempt-<n>/part-*.log`
 - failure signatures:
   - `unable to create native thread`
@@ -122,6 +128,10 @@ Split aggregation formulas:
 - connection success rate = `published_total / (published_total + failed_total)`
 - business pipeline success rate = `min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total`
 - business core pipeline success rate = `min(parse_ok_total, redis_ok_total) / recv_total`
+
+Interpretation note:
+- `overall` down with relatively stable `core` means Influx path is the primary bottleneck candidate.
+- `inflight` growth with latency increase means downstream processing saturation/backlog.
 
 ## Service Objectives (SLO)
 - Ingestion success rate: `>= 99.9%`

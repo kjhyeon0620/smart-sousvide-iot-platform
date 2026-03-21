@@ -21,14 +21,20 @@
 - `parse failure ratio` 상승 시 payload/스키마 변경 의심
 - `influx failure ratio` 상승 시 Influx 연결/토큰/지연 점검
 - `redis failure ratio` 상승 시 Redis 연결/메모리 점검
+- `processing failure ratio` 상승 시 애플리케이션 내부 예외 또는 executor backlog 의심
 
-3. Downlink Command Events 확인
+3. Ingestion Pipeline Success 확인
+- `overall pipeline success`가 하락하면 Influx 또는 Redis 경로를 우선 의심
+- `core pipeline success`는 유지되고 `overall`만 하락하면 Influx write path 병목 가능성이 높음
+- `inflight`가 계속 상승하면 downstream 처리 속도가 입력 속도를 따라가지 못하는 상태로 본다
+
+4. Downlink Command Events 확인
 - `failed/s`, `expired/s`, `retried/s` 급증 여부 확인
 
-4. Downlink Reliability Ratios 확인
+5. Downlink Reliability Ratios 확인
 - `acked ratio` 하락 + `timeout ratio` 상승이면 디바이스 ACK 경로 또는 네트워크 지연 우선 점검
 
-5. System Runtime Overview 확인
+6. System Runtime Overview 확인
 - CPU 급등, thread 증가, HTTP req/s 급증 여부 확인
 
 ## Incident Scenarios
@@ -60,10 +66,21 @@
 - 조치:
   - broker 연결/인증 복구 후 재시도
 
+### 4) Overall Pipeline Success 급락
+- 증상: `overall pipeline success` 급락, `core pipeline success`는 유지 또는 상대적으로 높음
+- 점검:
+  - InfluxDB 상태 및 write latency
+  - strict / bypass 모드 설정 확인
+  - backend 로그의 Influx write failure 메시지 확인
+- 조치:
+  - 우선 bypass 모드로 core path를 분리 검증
+  - Influx 연결/토큰/스토리지 상태 복구 후 strict 재검증
+
 ## Suggested Thresholds (Initial)
 - parse failure ratio: `> 0.01` (1%)
 - timeout ratio: `> 0.05` (5%)
 - downlink failed/s: 평시 대비 3배 이상
+- inflight: 지속 증가 추세면 backlog 의심
 
 ## Related Docs
 - `docs/observability.md`

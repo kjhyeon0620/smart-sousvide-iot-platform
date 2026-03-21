@@ -35,9 +35,11 @@ public class MqttConsumer {
 
     @ServiceActivator(inputChannel = "mqttInputChannel")
     public void handle(Message<?> message) {
+        long startedAtNanos = System.nanoTime();
         String topic = (String) message.getHeaders().get(MqttHeaders.RECEIVED_TOPIC);
         String rawPayload = payloadAsString(message.getPayload());
         ingestionMetricsCollector.recordMqttReceived();
+        ingestionMetricsCollector.incrementInFlight();
 
         try {
             DeviceStatusMessage statusMessage = mqttPayloadParser.parseDeviceStatus(rawPayload);
@@ -55,6 +57,12 @@ public class MqttConsumer {
                     topic,
                     rawPayload,
                     ex.getMessage());
+        } catch (RuntimeException ex) {
+            ingestionMetricsCollector.recordProcessingFailure();
+            log.error("[MQTT] Processing failed. topic={}, payload={}", topic, rawPayload, ex);
+        } finally {
+            ingestionMetricsCollector.decrementInFlight();
+            ingestionMetricsCollector.recordProcessingLatency(System.nanoTime() - startedAtNanos);
         }
     }
 

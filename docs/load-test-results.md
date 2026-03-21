@@ -166,3 +166,13 @@ Use the same split-table schema above for PR2 rows, with `Influx Bypass` and `Bu
   - connection success and throughput
   - business overall/core success split
   - parse/influx/redis failure counters and bypass count
+
+## Phase 2 Baseline Change
+- Backend ingestion path now uses executor-backed dispatch instead of direct synchronous channel handoff.
+- Additional metrics were added to classify backend saturation:
+  - `processing_failure_total`
+  - `overall_pipeline_success_total`
+  - `core_pipeline_success_total`
+  - `inflight`
+  - ingestion processing latency timer
+- Re-run the 5k HiveMQ validation after this change and append strict/bypass comparison rows with the updated metric set.

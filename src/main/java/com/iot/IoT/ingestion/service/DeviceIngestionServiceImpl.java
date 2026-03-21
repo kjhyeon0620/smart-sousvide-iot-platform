@@ -46,12 +46,15 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
     @Override
     public void ingest(DeviceStatusMessage message) {
         Instant now = Instant.now();
+        boolean influxWritten = false;
+        boolean redisUpdated = false;
 
         if (isInfluxWriteBypassMode()) {
             ingestionMetricsCollector.recordInfluxBypass();
         } else {
             try {
                 temperatureTimeSeriesPort.save(message, now);
+                influxWritten = true;
                 ingestionMetricsCollector.recordInfluxSuccess();
             } catch (Exception e) {
                 ingestionMetricsCollector.recordInfluxFailure();
@@ -66,20 +69,32 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
 
         try {
             heartbeatPort.updateLastSeen(message.deviceId(), now);
+            redisUpdated = true;
             ingestionMetricsCollector.recordRedisSuccess();
         } catch (Exception e) {
             ingestionMetricsCollector.recordRedisFailure();
             log.error("[INGESTION] Redis heartbeat update failed. deviceId={}", message.deviceId(), e);
         }
 
-        ControlAction action = controlDecisionEngine.decide(message);
-        log.info("[CONTROL] Decision made. deviceId={}, temp={}, targetTemp={}, state={}, action={}",
-                message.deviceId(),
-                message.temp(),
-                message.targetTemp(),
-                message.state(),
-                action);
-        deviceService.sendAutoControlCommand(message.deviceId(), action, now);
+        if (redisUpdated) {
+            ingestionMetricsCollector.recordCorePipelineSuccess();
+        }
+        if (redisUpdated && influxWritten) {
+            ingestionMetricsCollector.recordOverallPipelineSuccess();
+        }
+
+        try {
+            ControlAction action = controlDecisionEngine.decide(message);
+            log.info("[CONTROL] Decision made. deviceId={}, temp={}, targetTemp={}, state={}, action={}",
+                    message.deviceId(),
+                    message.temp(),
+                    message.targetTemp(),
+                    message.state(),
+                    action);
+            deviceService.sendAutoControlCommand(message.deviceId(), action, now);
+        } catch (RuntimeException ex) {
+            log.error("[CONTROL] Auto control dispatch failed. deviceId={}", message.deviceId(), ex);
+        }
     }
 
     private boolean isInfluxWriteBypassMode() {
