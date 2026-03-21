@@ -64,18 +64,35 @@ class DeviceServiceImplTest {
         temperatureTimeSeriesQueryPort = Mockito.mock(TemperatureTimeSeriesQueryPort.class);
         deviceCommandPublisherPort = Mockito.mock(DeviceCommandPublisherPort.class);
         downlinkMetricsRecorder = Mockito.mock(DownlinkMetricsRecorder.class);
-        deviceService = new DeviceServiceImpl(
+        DeviceQueryService deviceQueryService = new DeviceQueryService(
                 deviceRepository,
                 deviceCommandRepository,
                 watchdogStatePort,
                 temperatureTimeSeriesQueryPort,
+                120
+        );
+        DeviceControlPolicyService deviceControlPolicyService = new DeviceControlPolicyService(deviceRepository);
+        DeviceCommandService deviceCommandService = new DeviceCommandService(
+                deviceRepository,
+                deviceCommandRepository,
                 deviceCommandPublisherPort,
                 downlinkMetricsRecorder,
-                120,
                 10,
                 30,
                 30,
                 3
+        );
+        DeviceCommandReliabilityService deviceCommandReliabilityService = new DeviceCommandReliabilityService(
+                deviceCommandRepository,
+                deviceCommandPublisherPort,
+                downlinkMetricsRecorder,
+                10
+        );
+        deviceService = new DeviceServiceImpl(
+                deviceQueryService,
+                deviceControlPolicyService,
+                deviceCommandService,
+                deviceCommandReliabilityService
         );
     }
 

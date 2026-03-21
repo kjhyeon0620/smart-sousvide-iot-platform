@@ -77,6 +77,16 @@
   - replay 실행 경로 구현
   - duplicate suppression을 timestamp/sequence 기반 정책으로 고도화
 
+## Phase 4 Update
+- 현재 구현 상태:
+  - `DeviceServiceImpl`를 얇은 façade로 축소
+  - query / control policy / command / reliability 책임을 전용 서비스로 분리
+  - reliability scheduler가 전용 reliability service에 직접 의존하도록 정리
+- 남은 보강:
+  - controller가 필요 시 유스케이스 서비스에 직접 의존하도록 추가 축소 검토
+  - 전용 서비스별 테스트 파일 분리
+  - 공통 매핑/정규화 로직의 지원 클래스로의 승격 여부 검토
+
 ## 5. Phase Details
 ## Phase 1: Device Management API
 - 목표:
