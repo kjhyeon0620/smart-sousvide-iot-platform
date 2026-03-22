@@ -1,0 +1,22 @@
+{
+  "run_id": "direct-bypass-1000-20260323-013750",
+  "attempt": "1",
+  "recv_total": 14532,
+  "parse_ok_total": 12983,
+  "parse_fail_total": 0,
+  "influx_ok_total": 0,
+  "influx_fail_total": 0,
+  "influx_bypass_total": 12983,
+  "redis_ok_total": 12983,
+  "redis_fail_total": 0,
+  "pipeline_success_total": 0,
+  "pipeline_failure_total": 14532,
+  "pipeline_success_rate": 0.0000,
+  "pipeline_success_rate_pct": 0.00,
+  "pipeline_success_formula": "min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total",
+  "core_pipeline_success_total": 12983,
+  "core_pipeline_failure_total": 1549,
+  "core_pipeline_success_rate": 0.8934,
+  "core_pipeline_success_rate_pct": 89.34,
+  "core_pipeline_success_formula": "min(parse_ok_total, redis_ok_total) / recv_total"
+}

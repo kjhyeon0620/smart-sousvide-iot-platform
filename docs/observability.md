@@ -29,12 +29,20 @@ curl -s http://localhost:8080/actuator/prometheus | rg "^iot\\."
   - `iot_ingestion_influx_success_total`
   - `iot_ingestion_influx_failure_total`
   - `iot_ingestion_influx_bypass_total`
+  - `iot_ingestion_influx_write_latency_seconds`
   - `iot_ingestion_redis_success_total`
   - `iot_ingestion_redis_failure_total`
+  - `iot_ingestion_redis_heartbeat_latency_seconds`
   - `iot_ingestion_processing_failure_total`
   - `iot_ingestion_pipeline_overall_success_total`
   - `iot_ingestion_pipeline_core_success_total`
   - `iot_ingestion_inflight`
+  - `iot_ingestion_e2e_latency_seconds`
+  - `iot_ingestion_executor_queue_wait_seconds`
+  - `iot_ingestion_executor_rejected_total`
+  - `iot_ingestion_executor_queue_depth`
+  - `iot_ingestion_executor_active`
+  - `iot_ingestion_control_dispatch_latency_seconds`
   - `iot_ingestion_processing_latency_seconds`
 - Downlink:
   - `iot_downlink_command_sent_total`
@@ -49,12 +57,20 @@ curl -s http://localhost:8080/actuator/prometheus | rg "^iot\\."
 - `env`: `${APP_ENV:local}`
 
 ## Ingestion Notes
-- MQTT inbound channel은 executor 기반으로 분리되어 broker 수신 스레드와 downstream 처리 스레드를 느슨하게 분리한다.
+- MQTT inbound channel은 `ingestion.channel.mode=direct|executor`로 전환 가능하다.
+- `executor` 모드에서는 broker 수신 스레드와 downstream 처리 스레드를 느슨하게 분리한다.
 - business success 지표는 아래 두 축으로 본다.
   - overall pipeline success: parse 이후 Influx + Redis가 모두 성공한 건수
   - core pipeline success: parse 이후 Redis heartbeat까지 성공한 건수
 - `strict` 모드는 Influx write path를 포함한 전체 경로 검증용이다.
 - `bypass` 모드는 Influx 압력을 제외하고 parse + Redis + control path를 검증하기 위한 모드다.
+- 주요 성능 비교 지표는 아래 순서로 본다.
+  - `iot_ingestion_e2e_latency_seconds`: channel 진입부터 downstream 처리 종료까지의 전체 지연
+  - `iot_ingestion_processing_latency_seconds`: consumer 실행 이후 처리 지연
+  - `iot_ingestion_executor_queue_wait_seconds`: executor queue 대기 지연
+  - `iot_ingestion_influx_write_latency_seconds`: Influx 저장 지연
+  - `iot_ingestion_redis_heartbeat_latency_seconds`: Redis heartbeat 갱신 지연
+  - `iot_ingestion_control_dispatch_latency_seconds`: control decision + auto command dispatch 지연
 
 ## Grafana
 - Dashboard JSON:

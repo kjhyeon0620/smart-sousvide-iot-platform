@@ -176,3 +176,115 @@ Use the same split-table schema above for PR2 rows, with `Influx Bypass` and `Bu
   - `inflight`
   - ingestion processing latency timer
 - Re-run the 5k HiveMQ validation after this change and append strict/bypass comparison rows with the updated metric set.
+
+## Phase 2 Direct vs Executor (Bypass Mode)
+
+### Objective
+- Compare `direct` and `executor` channel modes under the same bypass-mode load.
+- Isolate parse + Redis + control path from Influx write pressure.
+
+### Test Conditions
+- Backend config:
+  - `ingestion.influx.write-mode=bypass`
+  - `ingestion.channel.mode=direct|executor`
+- Simulator:
+  - `SIM_TASK=mqttLoadTestHive`
+  - `messages-per-second=1`
+  - `duration-seconds=60`
+  - `qos=1`
+- Measurement focus:
+  - connection throughput
+  - business `core_pipeline_success_rate`
+  - executor queue wait presence
+
+### Commands
+```bash
+# direct + bypass
+SIM_TASK=mqttLoadTestHive RUN_ID="direct-bypass-1000-$(date +%Y%m%d-%H%M%S)" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 REQUIRE_BUSINESS_SUMMARY=1 ./scripts/loadtest/run-distributed.sh 1000 2 120 1 60 1
+SIM_TASK=mqttLoadTestHive RUN_ID="direct-bypass-2000-$(date +%Y%m%d-%H%M%S)" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=360 REQUIRE_BUSINESS_SUMMARY=1 ./scripts/loadtest/run-distributed.sh 2000 3 120 1 60 1
+SIM_TASK=mqttLoadTestHive RUN_ID="direct-bypass-3000-$(date +%Y%m%d-%H%M%S)" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=420 REQUIRE_BUSINESS_SUMMARY=1 ./scripts/loadtest/run-distributed.sh 3000 4 120 1 60 1
+
+# executor + bypass
+SIM_TASK=mqttLoadTestHive RUN_ID="executor-bypass-1000-$(date +%Y%m%d-%H%M%S)" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 REQUIRE_BUSINESS_SUMMARY=1 ./scripts/loadtest/run-distributed.sh 1000 2 120 1 60 1
+SIM_TASK=mqttLoadTestHive RUN_ID="executor-bypass-2000-$(date +%Y%m%d-%H%M%S)" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=360 REQUIRE_BUSINESS_SUMMARY=1 ./scripts/loadtest/run-distributed.sh 2000 3 120 1 60 1
+SIM_TASK=mqttLoadTestHive RUN_ID="executor-bypass-3000-$(date +%Y%m%d-%H%M%S)" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=420 REQUIRE_BUSINESS_SUMMARY=1 ./scripts/loadtest/run-distributed.sh 3000 4 120 1 60 1
+```
+
+### Results
+| Mode | Connections | Run ID | Published | Failed | Throughput (msg/s) | Business recv | Core pipeline success | Core success(%) | Notes |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---|
+| direct | 1000 | `direct-bypass-1000-20260323-013750` | `61000` | `0` | `1016.66` | `14532` | `12983` | `89.34` | bypass mode |
+| direct | 2000 | `direct-bypass-2000-20260323-014108` | `122000` | `0` | `2033.34` | `7915` | `7084` | `89.50` | bypass mode |
+| direct | 3000 | `direct-bypass-3000-retry-20260323-014826` | `183000` | `0` | `3050.00` | `8249` | `7633` | `92.53` | bypass mode |
+| executor | 1000 | `executor-bypass-1000-20260323-020032` | `60500` | `0` | `1008.33` | `10831` | `10572` | `97.61` | queue wait measured |
+| executor | 2000 | `executor-bypass-2000-20260323-020305` | `122000` | `0` | `2033.34` | `5849` | `5777` | `98.77` | queue wait measured |
+| executor | 3000 | `executor-bypass-3000-20260323-020536` | `183000` | `0` | `3050.00` | `5371` | `5349` | `99.59` | queue wait measured |
+
+### Comparison Summary
+| Connections | Direct core success(%) | Executor core success(%) | Improvement (%p) |
+|---:|---:|---:|---:|
+| 1000 | `89.34` | `97.61` | `+8.27` |
+| 2000 | `89.50` | `98.77` | `+9.27` |
+| 3000 | `92.53` | `99.59` | `+7.06` |
+
+### Interpretation
+- Connection-level throughput stayed stable across both modes up to `3050 msg/s`.
+- In bypass mode, `executor` consistently improved `core_pipeline_success_rate` over `direct`.
+- The measured gain range was `+7.06%p` to `+9.27%p`.
+- `executor` mode produced observable queue wait metrics, which confirms that the broker receive thread and downstream processing were decoupled.
+- `executor_rejected_total` was observed during the executor test session, so saturation guard behavior should still be tracked in follow-up runs.
+
+### Measurement Notes
+- In bypass mode, `overall pipeline success` remains `0` by formula because Influx actual write success is intentionally excluded.
+- For bypass-mode comparisons, use `core_pipeline_success_rate` as the primary business metric.
+- Source artifacts:
+  - `docs/loadtest-runs/direct-bypass-1000-20260323-013750/attempt-1/*`
+  - `docs/loadtest-runs/direct-bypass-2000-20260323-014108/attempt-1/*`
+  - `docs/loadtest-runs/direct-bypass-3000-retry-20260323-014826/attempt-1/*`
+  - `docs/loadtest-runs/executor-bypass-1000-20260323-020032/attempt-1/*`
+  - `docs/loadtest-runs/executor-bypass-2000-20260323-020305/attempt-1/*`
+  - `docs/loadtest-runs/executor-bypass-3000-20260323-020536/attempt-1/*`
+
+## Phase 2 Executor Strict Validation
+
+### Objective
+- Validate the full ingestion path with Influx write enabled after bypass-mode comparison.
+- Confirm whether the executor-based path remains stable when actual Influx persistence is included.
+
+### Preconditions
+- `ingestion.channel.mode=executor`
+- `ingestion.influx.write-mode=strict`
+- Influx direct write probe succeeded with `HTTP 204`
+
+Direct write probe:
+```bash
+curl -i -XPOST "http://localhost:8086/api/v2/write?org=myorg&bucket=sousvide_bucket&precision=s" \
+  -H "Authorization: Token my-super-secret-auth-token" \
+  --data-raw "strict_probe,deviceId=SV-TEST temp=60.5"
+```
+
+### Commands
+```bash
+SIM_TASK=mqttLoadTestHive RUN_ID="executor-strict-1000-clean-$(date +%Y%m%d-%H%M%S)" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=300 ./scripts/loadtest/run-distributed.sh 1000 2 120 1 60 1
+SIM_TASK=mqttLoadTestHive RUN_ID="executor-strict-2000-clean-retry-$(date +%Y%m%d-%H%M%S)" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=360 ./scripts/loadtest/run-distributed.sh 2000 3 120 1 60 1
+SIM_TASK=mqttLoadTestHive RUN_ID="executor-strict-3000-clean-retry-$(date +%Y%m%d-%H%M%S)" MAX_ATTEMPTS=1 PART_TIMEOUT_SECONDS=420 ./scripts/loadtest/run-distributed.sh 3000 4 120 1 60 1
+```
+
+### Results
+| Mode | Connections | Run ID | Published | Failed | Throughput (msg/s) | Business recv | Influx success | Influx failure | Overall pipeline success | Overall success(%) | Notes |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| executor + strict | 1000 | `executor-strict-1000-clean-20260323-022447` | `61000` | `0` | `1016.66` | `5888` | `5776` | `0` | `5776` | `98.10` | manual business summary generation |
+| executor + strict | 2000 | `executor-strict-2000-clean-retry-20260323-023138` | `122000` | `0` | `2033.34` | `5208` | `5204` | `0` | `5204` | `99.92` | manual business summary generation |
+| executor + strict | 3000 | `executor-strict-3000-clean-retry-20260323-023509` | `183000` | `0` | `3050.00` | `5346` | `5323` | `0` | `5323` | `99.57` | manual business summary generation |
+
+### Interpretation
+- After restoring valid Influx authorization, the strict path completed with `0` Influx write failures in all measured runs.
+- Executor-based ingestion remained stable up to `3050 msg/s` connection throughput with `99.57%` to `99.92%` overall pipeline success in the measured strict runs.
+- This confirms that the executor-based channel not only improves the bypass-mode core path, but also sustains high success rates when actual Influx persistence is included.
+
+### Strict Validation Notes
+- For the strict reruns, `business-summary.json` for the later runs was generated by copying the completed `backend.log` into the attempt directory and running `scripts/loadtest/summarize-ingestion-metrics.sh` manually.
+- Source artifacts:
+  - `docs/loadtest-runs/executor-strict-1000-clean-20260323-022447/attempt-1/*`
+  - `docs/loadtest-runs/executor-strict-2000-clean-retry-20260323-023138/attempt-1/*`
+  - `docs/loadtest-runs/executor-strict-3000-clean-retry-20260323-023509/attempt-1/*`

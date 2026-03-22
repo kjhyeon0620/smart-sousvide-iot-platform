@@ -52,6 +52,7 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
         if (isInfluxWriteBypassMode()) {
             ingestionMetricsCollector.recordInfluxBypass();
         } else {
+            long influxStartedAtNanos = System.nanoTime();
             try {
                 temperatureTimeSeriesPort.save(message, now);
                 influxWritten = true;
@@ -67,9 +68,12 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
                         e);
                 log.error("[RELIABILITY] Storage failure classified. store=INFLUX, deviceId={}, replayable=true",
                         message.deviceId(), e);
+            } finally {
+                ingestionMetricsCollector.recordInfluxWriteLatency(System.nanoTime() - influxStartedAtNanos);
             }
         }
 
+        long redisStartedAtNanos = System.nanoTime();
         try {
             heartbeatPort.updateLastSeen(message.deviceId(), now);
             redisUpdated = true;
@@ -80,6 +84,8 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
             log.error("[INGESTION] Redis heartbeat update failed. deviceId={}", message.deviceId(), e);
             log.error("[RELIABILITY] Storage failure classified. store=REDIS, deviceId={}, replayable=true",
                     message.deviceId(), e);
+        } finally {
+            ingestionMetricsCollector.recordRedisHeartbeatLatency(System.nanoTime() - redisStartedAtNanos);
         }
 
         if (redisUpdated) {
@@ -89,6 +95,7 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
             ingestionMetricsCollector.recordOverallPipelineSuccess();
         }
 
+        long controlDispatchStartedAtNanos = System.nanoTime();
         try {
             ControlAction action = controlDecisionEngine.decide(message);
             log.info("[CONTROL] Decision made. deviceId={}, temp={}, targetTemp={}, state={}, action={}",
@@ -103,6 +110,8 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
             log.error("[CONTROL] Auto control dispatch failed. deviceId={}", message.deviceId(), ex);
             log.error("[RELIABILITY] Control dispatch failure classified. deviceId={}, replayable=true",
                     message.deviceId(), ex);
+        } finally {
+            ingestionMetricsCollector.recordControlDispatchLatency(System.nanoTime() - controlDispatchStartedAtNanos);
         }
     }
 

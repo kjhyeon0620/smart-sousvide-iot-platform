@@ -1,0 +1,12 @@
+{
+  "run_id": "executor-bypass-2000-20260323-020305",
+  "attempt": "1",
+  "parts": 3,
+  "published_total": 122000,
+  "failed_total": 0,
+  "attempted_total": 122000,
+  "success_rate": 1.0000,
+  "success_rate_pct": 100.00,
+  "throughput_total_msg_per_sec": 2033.34,
+  "success_rate_formula": "published_total / (published_total + failed_total)"
+}

@@ -13,8 +13,8 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
-        format_sql: true
-        show_sql: true
+        format_sql: false
+        show_sql: false
 
   # 2. Redis Configuration
   data:
@@ -38,7 +38,13 @@ influxdb:
   bucket: sousvide_bucket
 
 ingestion:
+  channel:
+    mode: executor
   heartbeat-ttl-seconds: 120
+  executor:
+    core-pool-size: 4
+    max-pool-size: 16
+    queue-capacity: 5000
   influx:
     write-mode: strict
   metrics:
@@ -47,13 +53,16 @@ ingestion:
 control:
   deadband: 0.3
 watchdog:
-  scan-interval-ms: 5000
+  scan-interval-ms: 30000
   offline-notify-cooldown-seconds: 60
 
 logging:
   level:
     root: INFO
-    org.springframework.integration: DEBUG
+    org.springframework.integration: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN
+    com.iot.IoT.watchdog: WARN
 
 management:
   endpoints:

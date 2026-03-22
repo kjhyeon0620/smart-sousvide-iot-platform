@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -36,6 +37,7 @@ public class IngestionMetricsCollector {
     private final LongAdder parseDeadLetterTotal = new LongAdder();
     private final LongAdder storageReplayCandidateTotal = new LongAdder();
     private final LongAdder controlReplayCandidateTotal = new LongAdder();
+    private final LongAdder executorRejectedTotal = new LongAdder();
     private final AtomicInteger inFlight = new AtomicInteger(0);
 
     private final AtomicLong lastMqttReceived = new AtomicLong(0);
@@ -53,6 +55,7 @@ public class IngestionMetricsCollector {
     private final AtomicLong lastParseDeadLetter = new AtomicLong(0);
     private final AtomicLong lastStorageReplayCandidate = new AtomicLong(0);
     private final AtomicLong lastControlReplayCandidate = new AtomicLong(0);
+    private final AtomicLong lastExecutorRejected = new AtomicLong(0);
 
     private final Counter mqttReceivedCounter;
     private final Counter parseSuccessCounter;
@@ -69,7 +72,13 @@ public class IngestionMetricsCollector {
     private final Counter parseDeadLetterCounter;
     private final Counter storageReplayCandidateCounter;
     private final Counter controlReplayCandidateCounter;
+    private final Counter executorRejectedCounter;
     private final Timer processingLatencyTimer;
+    private final Timer endToEndLatencyTimer;
+    private final Timer executorQueueWaitTimer;
+    private final Timer influxWriteLatencyTimer;
+    private final Timer redisHeartbeatLatencyTimer;
+    private final Timer controlDispatchLatencyTimer;
 
     public IngestionMetricsCollector(MeterRegistry meterRegistry) {
         this.mqttReceivedCounter = meterRegistry.counter("iot.ingestion.mqtt.received.total");
@@ -87,7 +96,13 @@ public class IngestionMetricsCollector {
         this.parseDeadLetterCounter = meterRegistry.counter("iot.ingestion.parse.dead_letter.total");
         this.storageReplayCandidateCounter = meterRegistry.counter("iot.ingestion.storage.replay_candidate.total");
         this.controlReplayCandidateCounter = meterRegistry.counter("iot.ingestion.control.replay_candidate.total");
+        this.executorRejectedCounter = meterRegistry.counter("iot.ingestion.executor.rejected.total");
         this.processingLatencyTimer = meterRegistry.timer("iot.ingestion.processing.latency");
+        this.endToEndLatencyTimer = meterRegistry.timer("iot.ingestion.e2e.latency");
+        this.executorQueueWaitTimer = meterRegistry.timer("iot.ingestion.executor.queue.wait");
+        this.influxWriteLatencyTimer = meterRegistry.timer("iot.ingestion.influx.write.latency");
+        this.redisHeartbeatLatencyTimer = meterRegistry.timer("iot.ingestion.redis.heartbeat.latency");
+        this.controlDispatchLatencyTimer = meterRegistry.timer("iot.ingestion.control.dispatch.latency");
         Gauge.builder("iot.ingestion.inflight", inFlight, AtomicInteger::get)
                 .description("Current number of in-flight ingestion tasks")
                 .register(meterRegistry);
@@ -168,6 +183,11 @@ public class IngestionMetricsCollector {
         controlReplayCandidateCounter.increment();
     }
 
+    public void recordExecutorRejected() {
+        executorRejectedTotal.increment();
+        executorRejectedCounter.increment();
+    }
+
     public void incrementInFlight() {
         inFlight.incrementAndGet();
     }
@@ -180,6 +200,51 @@ public class IngestionMetricsCollector {
         if (nanos > 0) {
             processingLatencyTimer.record(Duration.ofNanos(nanos));
         }
+    }
+
+    public void recordEndToEndLatency(long nanos) {
+        if (nanos > 0) {
+            endToEndLatencyTimer.record(Duration.ofNanos(nanos));
+        }
+    }
+
+    public void recordExecutorQueueWait(long nanos) {
+        if (nanos > 0) {
+            executorQueueWaitTimer.record(Duration.ofNanos(nanos));
+        }
+    }
+
+    public void recordInfluxWriteLatency(long nanos) {
+        if (nanos > 0) {
+            influxWriteLatencyTimer.record(Duration.ofNanos(nanos));
+        }
+    }
+
+    public void recordRedisHeartbeatLatency(long nanos) {
+        if (nanos > 0) {
+            redisHeartbeatLatencyTimer.record(Duration.ofNanos(nanos));
+        }
+    }
+
+    public void recordControlDispatchLatency(long nanos) {
+        if (nanos > 0) {
+            controlDispatchLatencyTimer.record(Duration.ofNanos(nanos));
+        }
+    }
+
+    public void registerExecutorMetrics(ThreadPoolTaskExecutor executor, MeterRegistry meterRegistry) {
+        Gauge.builder("iot.ingestion.executor.queue.depth", executor,
+                        candidate -> candidate.getThreadPoolExecutor() == null
+                                ? 0
+                                : candidate.getThreadPoolExecutor().getQueue().size())
+                .description("Current number of queued ingestion tasks")
+                .register(meterRegistry);
+        Gauge.builder("iot.ingestion.executor.active", executor,
+                        candidate -> candidate.getThreadPoolExecutor() == null
+                                ? 0
+                                : candidate.getActiveCount())
+                .description("Current number of active ingestion worker threads")
+                .register(meterRegistry);
     }
 
     @Scheduled(fixedDelayString = "${ingestion.metrics-log-interval-ms:1000}")
@@ -199,6 +264,7 @@ public class IngestionMetricsCollector {
         long parseDeadLetter = parseDeadLetterTotal.sum();
         long storageReplayCandidate = storageReplayCandidateTotal.sum();
         long controlReplayCandidate = controlReplayCandidateTotal.sum();
+        long executorRejected = executorRejectedTotal.sum();
 
         long mqttReceivedDelta = mqttReceived - lastMqttReceived.getAndSet(mqttReceived);
         long parseSuccessDelta = parseSuccess - lastParseSuccess.getAndSet(parseSuccess);
@@ -219,6 +285,7 @@ public class IngestionMetricsCollector {
                 storageReplayCandidate - lastStorageReplayCandidate.getAndSet(storageReplayCandidate);
         long controlReplayCandidateDelta =
                 controlReplayCandidate - lastControlReplayCandidate.getAndSet(controlReplayCandidate);
+        long executorRejectedDelta = executorRejected - lastExecutorRejected.getAndSet(executorRejected);
 
         if (mqttReceivedDelta == 0
                 && parseSuccessDelta == 0
@@ -234,11 +301,12 @@ public class IngestionMetricsCollector {
                 && duplicateDroppedDelta == 0
                 && parseDeadLetterDelta == 0
                 && storageReplayCandidateDelta == 0
-                && controlReplayCandidateDelta == 0) {
+                && controlReplayCandidateDelta == 0
+                && executorRejectedDelta == 0) {
             return;
         }
 
-        log.info("[INGEST-METRICS/1s] recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, influxBypass={}, redisOk={}, redisFail={}, procFail={}, overallOk={}, coreOk={}, dupDrop={}, parseDlq={}, storageReplay={}, controlReplay={}, inFlight={} | totals recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, influxBypass={}, redisOk={}, redisFail={}, procFail={}, overallOk={}, coreOk={}, dupDrop={}, parseDlq={}, storageReplay={}, controlReplay={}",
+        log.info("[INGEST-METRICS/1s] recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, influxBypass={}, redisOk={}, redisFail={}, procFail={}, overallOk={}, coreOk={}, dupDrop={}, parseDlq={}, storageReplay={}, controlReplay={}, executorRejected={}, inFlight={} | totals recv={}, parseOk={}, parseFail={}, influxOk={}, influxFail={}, influxBypass={}, redisOk={}, redisFail={}, procFail={}, overallOk={}, coreOk={}, dupDrop={}, parseDlq={}, storageReplay={}, controlReplay={}, executorRejected={}",
                 mqttReceivedDelta,
                 parseSuccessDelta,
                 parseFailureDelta,
@@ -254,6 +322,7 @@ public class IngestionMetricsCollector {
                 parseDeadLetterDelta,
                 storageReplayCandidateDelta,
                 controlReplayCandidateDelta,
+                executorRejectedDelta,
                 inFlight.get(),
                 mqttReceived,
                 parseSuccess,
@@ -269,6 +338,7 @@ public class IngestionMetricsCollector {
                 duplicateDropped,
                 parseDeadLetter,
                 storageReplayCandidate,
-                controlReplayCandidate);
+                controlReplayCandidate,
+                executorRejected);
     }
 }
