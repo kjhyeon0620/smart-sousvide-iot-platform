@@ -1,11 +1,77 @@
 {
-  "generated_at": "2026-02-19T16:15:40+0900",
+  "generated_at": "2026-03-23T02:36:32+0900",
   "entries": [
     {
       "run_id": "dash-5k-20260219-161125",
       "attempt": "1",
       "connection_path": "docs/loadtest-runs/dash-5k-20260219-161125/attempt-1/connection-summary.json",
       "business_path": "docs/loadtest-runs/dash-5k-20260219-161125/attempt-1/business-summary.json"
+    },
+    {
+      "run_id": "direct-bypass-1000-20260323-013750",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/direct-bypass-1000-20260323-013750/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/direct-bypass-1000-20260323-013750/attempt-1/business-summary.json"
+    },
+    {
+      "run_id": "direct-bypass-2000-20260323-014108",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/direct-bypass-2000-20260323-014108/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/direct-bypass-2000-20260323-014108/attempt-1/business-summary.json"
+    },
+    {
+      "run_id": "direct-bypass-3000-retry-20260323-014826",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/direct-bypass-3000-retry-20260323-014826/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/direct-bypass-3000-retry-20260323-014826/attempt-1/business-summary.json"
+    },
+    {
+      "run_id": "executor-bypass-1000-20260323-015327",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/executor-bypass-1000-20260323-015327/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/executor-bypass-1000-20260323-015327/attempt-1/business-summary.json"
+    },
+    {
+      "run_id": "executor-bypass-1000-20260323-020032",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/executor-bypass-1000-20260323-020032/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/executor-bypass-1000-20260323-020032/attempt-1/business-summary.json"
+    },
+    {
+      "run_id": "executor-bypass-2000-20260323-020305",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/executor-bypass-2000-20260323-020305/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/executor-bypass-2000-20260323-020305/attempt-1/business-summary.json"
+    },
+    {
+      "run_id": "executor-bypass-3000-20260323-020536",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/executor-bypass-3000-20260323-020536/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/executor-bypass-3000-20260323-020536/attempt-1/business-summary.json"
+    },
+    {
+      "run_id": "executor-strict-1000-20260323-021842",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/executor-strict-1000-20260323-021842/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/executor-strict-1000-20260323-021842/attempt-1/business-summary.json"
+    },
+    {
+      "run_id": "executor-strict-1000-clean-20260323-022447",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/executor-strict-1000-clean-20260323-022447/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/executor-strict-1000-clean-20260323-022447/attempt-1/business-summary.json"
+    },
+    {
+      "run_id": "executor-strict-2000-20260323-022125",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/executor-strict-2000-20260323-022125/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/executor-strict-2000-20260323-022125/attempt-1/business-summary.json"
+    },
+    {
+      "run_id": "executor-strict-2000-clean-retry-20260323-023138",
+      "attempt": "1",
+      "connection_path": "docs/loadtest-runs/executor-strict-2000-clean-retry-20260323-023138/attempt-1/connection-summary.json",
+      "business_path": "docs/loadtest-runs/executor-strict-2000-clean-retry-20260323-023138/attempt-1/business-summary.json"
     }
   ]
 }

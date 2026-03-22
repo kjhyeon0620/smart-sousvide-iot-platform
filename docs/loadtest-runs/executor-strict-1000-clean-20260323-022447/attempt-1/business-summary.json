@@ -1,0 +1,22 @@
+{
+  "run_id": "executor-strict-1000-clean-20260323-022447",
+  "attempt": "1",
+  "recv_total": 5888,
+  "parse_ok_total": 5776,
+  "parse_fail_total": 0,
+  "influx_ok_total": 5776,
+  "influx_fail_total": 0,
+  "influx_bypass_total": 0,
+  "redis_ok_total": 5776,
+  "redis_fail_total": 0,
+  "pipeline_success_total": 5776,
+  "pipeline_failure_total": 112,
+  "pipeline_success_rate": 0.9810,
+  "pipeline_success_rate_pct": 98.10,
+  "pipeline_success_formula": "min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total",
+  "core_pipeline_success_total": 5776,
+  "core_pipeline_failure_total": 112,
+  "core_pipeline_success_rate": 0.9810,
+  "core_pipeline_success_rate_pct": 98.10,
+  "core_pipeline_success_formula": "min(parse_ok_total, redis_ok_total) / recv_total"
+}

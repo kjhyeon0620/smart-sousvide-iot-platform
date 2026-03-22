@@ -1,0 +1,22 @@
+{
+  "run_id": "executor-bypass-3000-20260323-020536",
+  "attempt": "1",
+  "recv_total": 5371,
+  "parse_ok_total": 5349,
+  "parse_fail_total": 0,
+  "influx_ok_total": 0,
+  "influx_fail_total": 0,
+  "influx_bypass_total": 5349,
+  "redis_ok_total": 5349,
+  "redis_fail_total": 0,
+  "pipeline_success_total": 0,
+  "pipeline_failure_total": 5371,
+  "pipeline_success_rate": 0.0000,
+  "pipeline_success_rate_pct": 0.00,
+  "pipeline_success_formula": "min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total",
+  "core_pipeline_success_total": 5349,
+  "core_pipeline_failure_total": 22,
+  "core_pipeline_success_rate": 0.9959,
+  "core_pipeline_success_rate_pct": 99.59,
+  "core_pipeline_success_formula": "min(parse_ok_total, redis_ok_total) / recv_total"
+}

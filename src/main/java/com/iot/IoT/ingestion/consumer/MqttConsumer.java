@@ -45,6 +45,8 @@ public class MqttConsumer {
     @ServiceActivator(inputChannel = "mqttInputChannel")
     public void handle(Message<?> message) {
         long startedAtNanos = System.nanoTime();
+        long enqueuedAtNanos = headerAsLong(message, com.iot.IoT.ingestion.config.MqttConfig.INGESTION_ENQUEUED_AT_NANOS_HEADER)
+                .orElse(startedAtNanos);
         String topic = (String) message.getHeaders().get(MqttHeaders.RECEIVED_TOPIC);
         String rawPayload = payloadAsString(message.getPayload());
         ingestionMetricsCollector.recordMqttReceived();
@@ -87,6 +89,7 @@ public class MqttConsumer {
         } finally {
             ingestionMetricsCollector.decrementInFlight();
             ingestionMetricsCollector.recordProcessingLatency(System.nanoTime() - startedAtNanos);
+            ingestionMetricsCollector.recordEndToEndLatency(System.nanoTime() - enqueuedAtNanos);
         }
     }
 
@@ -105,5 +108,13 @@ public class MqttConsumer {
             return new String(bytes, StandardCharsets.UTF_8);
         }
         return String.valueOf(payload);
+    }
+
+    private java.util.OptionalLong headerAsLong(Message<?> message, String headerName) {
+        Object headerValue = message.getHeaders().get(headerName);
+        if (headerValue instanceof Number number) {
+            return java.util.OptionalLong.of(number.longValue());
+        }
+        return java.util.OptionalLong.empty();
     }
 }
