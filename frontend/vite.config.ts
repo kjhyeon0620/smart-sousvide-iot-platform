@@ -9,8 +9,11 @@ export default defineConfig({
       '/devices': {
         target: 'http://localhost:8080',
         changeOrigin: true
+      },
+      '/dev': {
+        target: 'http://localhost:8080',
+        changeOrigin: true
       }
     }
   }
 });
-

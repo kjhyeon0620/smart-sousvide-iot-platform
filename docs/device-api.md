@@ -199,6 +199,73 @@ HTTP API 계약의 기준 문서다. 계약을 바꾸는 이슈는 스펙에서 
   - `200 OK` (`ACKED`)
   - `404 Not Found` (`DEVICE_NOT_FOUND`, `COMMAND_NOT_FOUND`)
 
+## Dev-Only Dashboard Demo API
+
+스펙: [0057](specs/0057-dashboard-demo-data-console/spec.md)
+
+The dashboard demo API is available only when Spring runs with the `local` or `dev` profile. Production profiles do not create the controller bean.
+
+Base path:
+
+```http
+/dev/dashboard-demo
+```
+
+Safety rules:
+
+- All generated and mutable demo devices use the `SV-DEMO-` prefix.
+- `PATCH /dev/dashboard-demo/devices/{deviceId}` rejects non-demo device IDs.
+- `POST /dev/dashboard-demo/devices/{deviceId}/commands` rejects non-demo device IDs.
+- `DELETE /dev/dashboard-demo` deletes MySQL device and command rows only for `SV-DEMO-*`.
+- Redis demo heartbeat, active-device, and offline-notified keys are cleaned.
+- InfluxDB demo telemetry deletion is not implemented; fresh timestamped samples are written when scenarios are created.
+
+### GET /dev/dashboard-demo
+
+Returns availability metadata for the frontend panel.
+
+### POST /dev/dashboard-demo/scenario
+
+Request:
+
+```json
+{
+  "count": 5,
+  "scenario": "mixed",
+  "baseTargetTemp": 64.5
+}
+```
+
+Supported scenarios: `mixed`, `heating`, `holding`, `offline`, `command-failure`.
+
+### PATCH /dev/dashboard-demo/devices/{deviceId}
+
+Request:
+
+```json
+{
+  "online": true,
+  "enabled": true,
+  "temp": 61.2,
+  "targetTemp": 64.5,
+  "state": "HEATING"
+}
+```
+
+### POST /dev/dashboard-demo/devices/{deviceId}/commands
+
+Request:
+
+```json
+{
+  "statuses": ["PENDING", "SENT", "FAILED", "EXPIRED"]
+}
+```
+
+### DELETE /dev/dashboard-demo
+
+Clears `SV-DEMO-*` MySQL and Redis demo data. InfluxDB cleanup is documented as a current limit.
+
 ## Downlink Reliability Notes
 - 근거: [ADR-0002](adr/0002-downlink-command-reliability.md)
 - 상태 모델:

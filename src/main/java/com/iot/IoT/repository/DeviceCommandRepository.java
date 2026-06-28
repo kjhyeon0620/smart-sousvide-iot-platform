@@ -18,4 +18,6 @@ public interface DeviceCommandRepository extends JpaRepository<DeviceCommand, Lo
     Optional<DeviceCommand> findByIdAndDevicePk(Long id, Long devicePk);
 
     List<DeviceCommand> findByStatusIn(Collection<DeviceCommandStatus> statuses);
+
+    long deleteByDeviceIdStartingWith(String deviceIdPrefix);
 }

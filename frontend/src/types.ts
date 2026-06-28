@@ -72,3 +72,44 @@ export interface CommandPage {
   items: DeviceCommand[];
 }
 
+export type DemoScenario = 'mixed' | 'heating' | 'holding' | 'offline' | 'command-failure';
+
+export interface DemoScenarioRequest {
+  count: number;
+  scenario: DemoScenario;
+  baseTargetTemp: number;
+}
+
+export interface DemoStateRequest {
+  online: boolean;
+  enabled: boolean;
+  temp: number;
+  targetTemp: number;
+  state: 'HEATING' | 'HOLDING' | 'OFF';
+}
+
+export interface DemoCommandRequest {
+  statuses: Array<'PENDING' | 'SENT' | 'FAILED' | 'EXPIRED'>;
+}
+
+export interface DemoDevice {
+  id: number | null;
+  deviceId: string;
+  name: string | null;
+  enabled: boolean;
+  online: boolean;
+  temp: number;
+  targetTemp: number;
+  state: 'HEATING' | 'HOLDING' | 'OFF';
+}
+
+export interface DemoResponse {
+  createdDevices: number;
+  onlineDevices: number;
+  offlineDevices: number;
+  disabledDevices: number;
+  temperaturePoints: number;
+  commands: number;
+  warning: string | null;
+  devices: DemoDevice[];
+}
