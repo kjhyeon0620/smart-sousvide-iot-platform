@@ -76,8 +76,14 @@ image_pull_secret_name=ghcr-pull-secret
 
 ## Runtime Configuration
 
-The backend image only contains the Spring Boot application. The application
-still needs runtime services and environment variables in the Oracle k3s target.
+The image contains the Spring Boot application and the existing React dashboard.
+The Dockerfile builds `frontend/` with `npm ci` and `npm run build`, then copies
+`frontend/dist/` into `src/main/resources/static/` before building the JAR.
+Spring Boot serves the dashboard at `/` and the existing API at `/devices`.
+Both use the same origin, so no production `VITE_API_BASE_URL` override is needed.
+A new image must be built and deployed; redeploying an older image does not add
+the dashboard. The application still needs runtime services and environment
+variables in the Oracle k3s target.
 Do not commit real secret values.
 
 Required service dependencies:

@@ -52,10 +52,19 @@ With the Spring backend running on `http://localhost:8080`, open the Vite URL an
 - `HEAT_ON`, `HEAT_OFF`, and `HOLD` call `POST /devices/{id}/commands`.
 - Offline or disabled devices block manual command buttons and show an explanatory state.
 
+## Production Packaging
+
+Build the existing root `Dockerfile` to include this dashboard in the application
+image. Its Node build stage installs the locked frontend dependencies and builds
+the assets; the Java build stage packages them under `BOOT-INF/classes/static/`.
+Deploy the newly built image, then verify `/` returns the dashboard, its referenced
+`/assets/` files load, and `/devices` still returns JSON. No KLEPAAS code changes
+are required. A plain local `bootJar` build does not run the frontend build.
+
 ## Risks And Limits
 
 - The MVP polls instead of using SSE or WebSocket updates.
-- The dashboard currently assumes the backend API is available through the Vite proxy or `VITE_API_BASE_URL`.
+- Local development uses the Vite proxy or `VITE_API_BASE_URL`. Production Docker builds package the dashboard into Spring Boot static resources, serving `/` and `/devices` from the same origin.
 - There is no authentication or device ownership filtering in this frontend because those backend concerns are out of scope for this PR.
 - Command success is displayed from command history state; device-level ACK latency still depends on the backend reliability flow.
 

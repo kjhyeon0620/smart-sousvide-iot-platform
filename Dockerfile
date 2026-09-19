@@ -1,5 +1,13 @@
 # syntax=docker/dockerfile:1.7
 
+  FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS frontend-builder
+  WORKDIR /frontend
+  COPY frontend/package.json frontend/package-lock.json ./
+  RUN npm ci
+  COPY frontend/index.html frontend/tsconfig.json frontend/vite.config.ts ./
+  COPY frontend/src ./src
+  RUN npm run build
+
   FROM eclipse-temurin:17-jdk-jammy AS builder
   WORKDIR /workspace
 
@@ -11,6 +19,7 @@
 
   # Source
   COPY src src
+  COPY --from=frontend-builder /frontend/dist/ src/main/resources/static/
 
   # Build executable Spring Boot jar
   RUN --mount=type=cache,target=/root/.gradle \
