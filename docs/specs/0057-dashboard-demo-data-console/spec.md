@@ -1,7 +1,7 @@
 ---
 issue: 57
 title: Dashboard demo data console
-status: in-progress
+status: done
 size: L
 type: feature
 branch: feature/#57-dashboard-demo-data-console
@@ -10,7 +10,7 @@ branch: feature/#57-dashboard-demo-data-console
 # Dashboard demo data console
 
 > 로컬 기획 노트(2026-05-06)와 GitHub 이슈 #57 본문을 옮겨 온 스펙이다.
-> **구현 현황 (2026-10-03)**: `feature/#57-dashboard-demo-data-console` 브랜치를 최신 `main`으로 rebase했다. 이미 머지된 #58 커밋은 중복이라 빠졌고, 삭제된 `docs/user-device-dashboard.md`의 변경은 이 스펙과 `device-api.md`의 "Dev-Only Dashboard Demo API" 섹션으로 옮겼다. PR 전 상태다.
+> **완료 (2026-10-03)**: #65로 머지됐다. 구현 브랜치를 최신 `main`으로 rebase하면서 이미 머지된 #58 커밋을 제외했고, 삭제된 `docs/user-device-dashboard.md`의 변경은 이 스펙과 `device-api.md`로 옮겼다.
 
 ## 목적 / 성공 조건
 - 목적: 개발자가 curl, MQTT publish, Redis/Influx 수동 조작 없이 UI 버튼으로 대시보드의 상태별 화면(online/offline/disabled/heating/holding/명령 실패·만료)을 재현하고 정리한다.
@@ -79,5 +79,10 @@ branch: feature/#57-dashboard-demo-data-console
 - 금지: 사용자 화면 레이아웃 변경
 - 검증: `npm run build`, 수동 QA
 
+## 운영 반영
+- 2026-10-03 #65 머지 커밋 `9fb375d`: CI 성공, "Build GHCR image and deploy via K-Le-PaaS" 성공 (run 37036144062). 운영 profile에서는 demo API가 생성되지 않으므로 운영 화면 변화는 없다.
+
 ## 회고
--
+- 어긋난 점: 구현(2026-06-28)이 PR 없이 브랜치에 남아 있다가, 그사이 문서 개편과 #58 머지로 충돌과 중복 커밋이 생겼다. 스펙 초안도 미구현으로 잘못 적혀 있었다.
+- 원인 분류: 완료 기준 느슨 (구현 이후 PR·머지까지 추적하는 곳이 없었다)
+- 고친 위치: `product.md` 백로그 표에 이슈별 상태와 스펙 열을 두고, `done`을 구현 PR 안에서 처리하도록 `specs/README.md`를 고쳤다 (#66).
