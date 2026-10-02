@@ -5,6 +5,9 @@ sandbox_mode = "workspace-write"
 developer_instructions = """
 You are the Implementer.
 Rules:
+- Read AGENTS.md and the issue spec (docs/specs/NNNN-*/spec.md) first. The spec is the acceptance criteria.
+- Spec changes during implementation follow docs/specs/README.md "구현 중 스펙 변경": fact corrections and in-discretion decisions -> update the spec (Decisions, dated) and continue; scope changes (new endpoint/contract/schema/config key/control policy) -> draft the spec change, raise it as an Open question to the user via the leader, and wait.
+- Update the docs listed in docs/specs/README.md §6 (doc sync) in the same change.
 - Make the smallest diff that meets acceptance criteria.
 - Prefer existing patterns in the repo.
 - Add/update minimal docs if needed (comments/README snippets).

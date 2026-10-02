@@ -1,12 +1,12 @@
-# Device Management API (Foundation)
+# Device API Contract
+
+HTTP API 계약의 기준 문서다. 계약을 바꾸는 이슈는 스펙에서 먼저 합의한 뒤 이 문서와 코드를 함께 수정한다 ([절차](specs/README.md)). MQTT와 저장소 계약은 [`architecture.md`](architecture.md)에 있다.
 
 ## Swagger
-- UI: `GET /swagger-ui.html`
-- OpenAPI JSON: `GET /v3/api-docs`
-
-## Purpose
-- 디바이스 관리 기능의 기본 골격을 제공한다.
-- 이후 상태 조회 확장, 다운링크 제어, 운영 정책 API의 기반으로 사용한다.
+- UI: `GET /swagger-ui.html` → `device-api` 그룹을 선택하고 `Try it out`으로 호출한다
+- OpenAPI JSON: `GET /v3/api-docs`, 그룹별: `GET /v3/api-docs/device-api`
+- Actuator endpoint는 `device-api` 그룹에 포함되지 않는다.
+- 요청·응답의 규칙과 에러 코드는 이 문서가 기준이다. Swagger는 수동 호출 도구로 쓴다.
 
 ## Endpoints
 
@@ -40,6 +40,19 @@
 - Default:
   - `page=0`
   - `size=20`
+- Response example:
+```json
+{
+  "items": [
+    { "id": 1, "deviceId": "SV-001", "name": "bath-1", "enabled": true,
+      "createdAt": "2026-03-02T00:00:00Z", "updatedAt": "2026-03-02T00:00:00Z" }
+  ],
+  "totalElements": 1,
+  "totalPages": 1,
+  "page": 0,
+  "size": 20
+}
+```
 - Responses:
   - `200 OK`
 
@@ -186,7 +199,8 @@
   - `200 OK` (`ACKED`)
   - `404 Not Found` (`DEVICE_NOT_FOUND`, `COMMAND_NOT_FOUND`)
 
-## Downlink Reliability Notes (Phase 5)
+## Downlink Reliability Notes
+- 근거: [ADR-0002](adr/0002-downlink-command-reliability.md)
 - 상태 모델:
   - `PENDING`: 생성됨, 아직 발행 전
   - `SENT`: 발행됨, ACK 대기
@@ -198,7 +212,8 @@
   - `retry-interval`: `10s` (기본값)
   - `max-retries`: `3` (기본값)
 
-## Auto Control Notes (Phase 1)
+## Auto Control Notes
+- 주의: `PATCH /devices/{id}/control-policy`로 저장한 정책은 현재 자동 제어 판단에 쓰이지 않는다 ([알려진 격차](architecture.md#9-알려진-격차)).
 - telemetry ingestion 경로에서 제어 판단 결과가 자동 downlink command로 연결된다.
 - 자동 발행 규칙:
   - `HOLD`는 발행하지 않는다.
@@ -217,7 +232,11 @@
 ```
 
 ## Error Codes
-- `DEVICE_NOT_FOUND`
-- `DEVICE_DUPLICATE`
-- `COMMAND_NOT_FOUND`
-- `INVALID_REQUEST`
+| code | HTTP | 발생 조건 |
+|---|---|---|
+| `DEVICE_NOT_FOUND` | 404 | 기기 없음 |
+| `COMMAND_NOT_FOUND` | 404 | 명령 없음 |
+| `DEVICE_DUPLICATE` | 409 | `deviceId` 중복 |
+| `INVALID_REQUEST` | 400 | Bean Validation 실패, 조회 파라미터 오류 |
+
+새 에러 코드는 `GlobalApiExceptionHandler`와 이 표에 함께 추가한다.

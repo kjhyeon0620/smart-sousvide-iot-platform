@@ -1,5 +1,5 @@
 name: Feature Request
-description: 기능 개발 이슈 템플릿
+description: 기능 개발 이슈 템플릿 (M/L 등급은 docs/specs 스펙 필수)
 title: "[Feature] "
 labels: ["type:feature"]
 body:
@@ -7,8 +7,12 @@ body:
     id: content
     attributes:
       label: Feature Details
-      description: 아래 템플릿 전체를 한 번에 복붙해서 작성하세요.
+      description: 아래 템플릿 전체를 한 번에 복붙해서 작성하세요. M/L 등급은 스펙 요약만 적고 상세는 스펙 파일에 둡니다.
       value: |
+        ## Spec
+        - 등급: S / M / L
+        - 스펙: docs/specs/NNNN-<slug>/spec.md (S 등급은 생략)
+
         ## Background
         - 왜 필요한 기능인지
 
@@ -19,11 +23,14 @@ body:
         - include:
         - exclude:
 
-        ## Technical Notes
-        - 설계/제약/트레이드오프
+        ## Contract
+        - HTTP / MQTT / 저장소 변경 (없으면 "변경 없음")
+
+        ## Edge Cases
+        - 잘못된 입력 / 중복 요청 / offline·disabled 기기 / 저장소·broker 장애 시 동작
 
         ## Test Plan
-        - 단위/통합/부하 테스트 계획
+        - 완료 증거: 어떤 테스트/명령이 무엇을 증명하는지
 
         ## Target Date
         - YYYY-MM-DD

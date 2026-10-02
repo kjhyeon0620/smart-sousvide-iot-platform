@@ -8,6 +8,13 @@ docker compose ps
 Run with at least Mosquitto up:
 - `smart-sousvide-mqtt` on `localhost:1883`
 
+## Summarizer Script Tests
+- `scripts/loadtest/summarize-results.sh`, `summarize-ingestion-metrics.sh`를 수정하면 아래 테스트로 집계 로직을 검사한다.
+- fixture: `tests/fixtures/loadtest/` (정상, 0건, 필수 키 누락, 잘못된 totals 등)
+```bash
+bash tests/loadtest/test-summarizers.sh
+```
+
 ## Current Execution Model
 - Use `scripts/loadtest/run-distributed.sh`.
 - Script does one-time runtime preparation, then runs each partition via direct `java -cp ...` execution.

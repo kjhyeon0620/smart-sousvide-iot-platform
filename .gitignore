@@ -40,3 +40,6 @@ data/
 log/
 .DS_Store
 **/*.log
+
+### Codex artifacts ###
+.codex/blog_diff*.patch

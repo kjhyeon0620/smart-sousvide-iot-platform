@@ -9,6 +9,10 @@ body:
       label: Tech Debt Details
       description: 아래 템플릿 전체를 한 번에 복붙해서 작성하세요.
       value: |
+        ## Spec
+        - 등급: S / M / L
+        - 스펙: docs/specs/NNNN-<slug>/spec.md (S 등급은 생략)
+
         ## Debt Description
         - 어떤 기술 부채인지
 
@@ -19,6 +23,10 @@ body:
         ## Proposed Solution
         - 개선 방안
         - 대안/트레이드오프
+
+        ## Scope
+        - include:
+        - exclude:
 
         ## Acceptance Criteria
         - [ ] 완료 조건 1
