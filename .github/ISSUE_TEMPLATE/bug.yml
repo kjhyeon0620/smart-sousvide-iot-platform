@@ -26,6 +26,9 @@ body:
         ## Logs / Evidence
         - 에러 로그, 스크린샷, 요청/응답
 
+        ## Suspected Contract
+        - 어긋난 계약/스펙 (예: docs/device-api.md, architecture.md §N, 스펙 링크) — 없으면 스펙 누락으로 회고에 기록
+
         ## Severity
         - critical / major / minor
 

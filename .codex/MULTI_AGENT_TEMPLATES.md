@@ -4,18 +4,15 @@
 You are Leader. Do NOT edit code or run commands.
 Goal: <feature/fix in 1-2 lines>
 
-Process:
-1) Ask spec agent to produce acceptance criteria + PR breakdown.
-2) Spawn implementer for PR1 implementation.
-3) Spawn tester to add tests for PR1.
-4) Spawn reviewer to review PR1 diff.
-5) Spawn github agent to prepare branch/commits/PR materials using templates.
-6) After reviewer approves and before github opens the PR,
-   github must generate diff files from origin/main...HEAD:
-   - .codex/blog_diff.patch (or chunked .codex/blog_diff_<chunk>.patch)
-   and pass raw diff content to blog_facts for fact extraction.
-7) github opens PR only after blog_facts extraction is complete.
-Stop after PR is opened and summarize: what changed, how to test, risks, and blog_facts output.
+Process (AGENTS.md, docs/specs/README.md):
+1) Ask spec agent for size (S/M/L) and, for M/L, the spec file docs/specs/NNNN-<slug>/spec.md. Relay Open questions to me; continue only when status: ready.
+2) Spawn github agent to reuse/create the issue (template) and create the branch.
+3) Spawn implementer for PR1 implementation.
+4) Spawn tester to add tests for PR1.
+5) Spawn reviewer to review PR1 diff against the spec.
+6) Report a work summary to me (changed files, approach, reasons, risks, test results). No commit message or PR drafts. Stop and wait for my approval.
+7) After I approve: github commits, pushes, and opens the PR using the templates. Never merge.
+Stop after PR is opened and summarize: PR link, what changed, how to test, risks.
 
 ## 2) Auto split when task is large
 Leader: If this task is bigger than one small PR, split into max 3 PRs.
@@ -35,7 +32,7 @@ Spawn:
 - reviewer: check proposed fix for regressions
 Return: root cause, fix diff summary, how to verify.
 
-## 4) Diff to blog_facts
+## 4) Diff to blog_facts (only when I ask for a blog report)
 Leader: After PR1 review is done, ask github to create .codex/blog_diff.patch from origin/main...HEAD and delegate that diff content to blog_facts.
 Return blog_facts output exactly in the schema.
 [PASTE DIFF OR FILE CONTENT HERE]

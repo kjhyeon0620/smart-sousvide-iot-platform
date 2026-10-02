@@ -18,7 +18,9 @@ MQTT 기반 수비드 디바이스 상태 메시지를 수집하고, Redis/Influ
 - Time-series: InfluxDB
 - Messaging: MQTT (Mosquitto broker, Paho/HiveMQ simulator path)
 - Observability: Spring Actuator, Micrometer, Prometheus, Grafana
+- Frontend: React + Vite + TypeScript user dashboard (`frontend/`, bundled into the Spring image)
 - Test/Load: JUnit, Mockito, distributed load test scripts
+- Deploy: Docker multi-stage → GHCR → K-Le-PaaS → Oracle k3s
 
 ## Architecture
 ```text
@@ -41,8 +43,7 @@ Operator/API
      -> DeviceCommandReliabilityService
 ```
 
-상세 결정 기록:
-- [Ingestion ADR](docs/adr/0001-ingestion-architecture.md)
+상세 구조와 계약: [Architecture](docs/architecture.md) · 결정 기록: [ADR](docs/adr/README.md)
 
 ## Core Features
 - Device management API
@@ -65,11 +66,15 @@ Operator/API
 - Observability
   - ingestion/downlink 메트릭 노출
   - Prometheus/Grafana 연동 기반 제공
+- User dashboard
+  - 기기 목록/상세, 온도 차트, 제어 정책, 명령 발행/이력 (polling 기반)
 
 ## API Summary
 주요 endpoint:
 - `POST /devices`
+- `GET /devices`
 - `GET /devices/{id}`
+- `PATCH /devices/{id}/enabled`
 - `GET /devices/{id}/status`
 - `GET /devices/{id}/temps`
 - `GET /devices/{id}/control-policy`
@@ -79,8 +84,7 @@ Operator/API
 - `POST /devices/{id}/commands/{commandId}/ack`
 
 상세 계약:
-- [Device API](docs/device-api.md)
-- [Swagger Guide](docs/swagger.md)
+- [Device API](docs/device-api.md) (Swagger 사용법 포함)
 
 ## Reliability And Observability
 현재 반영된 신뢰성 정책:
@@ -134,6 +138,11 @@ docker compose up -d
 ./gradlew test
 ```
 
+대시보드 개발 서버 (백엔드 `localhost:8080` 프록시):
+```bash
+cd frontend && npm ci && npm run dev
+```
+
 주요 확인 경로:
 - API: `http://localhost:8080/swagger-ui.html`
 - Actuator Health: `http://localhost:8080/actuator/health`
@@ -141,23 +150,21 @@ docker compose up -d
 - Grafana: `http://localhost:3000`
 
 ## Document Map
-- [Device API](docs/device-api.md)
-- [Swagger Guide](docs/swagger.md)
-- [Ingestion ADR](docs/adr/0001-ingestion-architecture.md)
-- [Observability](docs/observability.md)
-- [Operations Runbook](docs/operations-runbook.md)
-- [Load Test Results](docs/load-test-results.md)
-- [Load Test Scenarios](docs/load-test-scenarios.md)
-- [Refactoring Roadmap](docs/refactoring-roadmap.md)
+- 개발 방식 (Spec-Driven): [docs/specs/README.md](docs/specs/README.md)
+- 제품 범위·로드맵: [docs/product.md](docs/product.md)
+- 구조·계약·알려진 격차: [docs/architecture.md](docs/architecture.md)
+- 결정 기록: [docs/adr/](docs/adr/README.md)
+- API: [Device API](docs/device-api.md) (Swagger 포함)
+- 운영: [Observability](docs/observability.md), [Operations Runbook](docs/operations-runbook.md), [K-Le-PaaS Deployment](docs/klepaas-oracle-deployment.md)
+- 부하: [Load Test Scenarios](docs/load-test-scenarios.md), [Load Test Results](docs/load-test-results.md)
+- 기여: [CONTRIBUTING.md](CONTRIBUTING.md), AI 에이전트: [AGENTS.md](AGENTS.md)
 
 ## Current Limits
-- duplicate suppression은 best-effort in-memory 정책입니다.
-- persistent DLQ / replay worker는 아직 없습니다.
-- queue/backpressure는 후속 단계입니다.
+주요 한계는 [architecture.md §9 알려진 격차](docs/architecture.md#9-알려진-격차)에서 관리합니다.
+- 서버 제어 정책(`targetTemp`/`hysteresis`)이 아직 자동 제어에 반영되지 않습니다.
+- duplicate suppression은 best-effort in-memory 정책이며, persistent DLQ / replay worker는 아직 없습니다.
+- 인증/기기 소유권이 없습니다.
 - 고부하 strict 검증은 local single-host 환경 한계의 영향을 크게 받습니다.
 
 ## Next Steps
-- persistent DLQ 및 replay flow 도입
-- queue/backpressure 기반 ingestion decoupling 검토
-- service test 구조 추가 분리
-- 운영 환경 기준 성능/복구 검증 강화
+우선순위와 백로그는 [docs/product.md §6](docs/product.md#6-로드맵과-백로그)을 기준으로 합니다.
