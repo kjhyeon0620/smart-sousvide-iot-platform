@@ -86,7 +86,7 @@ connection success와 business pipeline success는 **분리해서** 평가한다
 | 순위 | 항목 | 요약 | 스펙 |
 |---|---|---|---|
 | 1 | 서버 제어 정책을 자동 제어에 연결 | 저장된 `targetTemp`/`hysteresis`가 자동 제어에 쓰이지 않는 격차 해소 | [draft](specs/draft-control-policy-auto-control/spec.md) |
-| 2 | Dashboard demo data console | dev 전용 API와 패널로 대시보드의 상태별 데모 데이터를 생성하고 삭제 | [#57 구현됨, PR 전](specs/0057-dashboard-demo-data-console/spec.md) |
+| 2 | Dashboard demo data console | dev 전용 API와 패널로 대시보드의 상태별 데모 데이터를 생성하고 삭제 | [#57 구현됨(rebase 완료), PR 전](specs/0057-dashboard-demo-data-console/spec.md) |
 | 3 | DeviceOwnership + JWT | 내 기기만 조회하고 제어. 401/403, protected route | 미작성 |
 | 4 | Influx fallback + readiness 강화 | Influx 401/timeout 대응, readiness probe | 미작성 |
 | 5 | Command scheduler scan 최적화 | `nextRetryAt` 인덱스 중심 스캔 | 미작성 |

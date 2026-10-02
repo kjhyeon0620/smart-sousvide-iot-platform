@@ -28,7 +28,7 @@ HTTP API의 세부 계약은 [`device-api.md`](device-api.md), 결정 근거는 
 | `ingestion.config` | MQTT inbound(`direct`/`executor` 채널), Influx, Jackson 설정 |
 | `ingestion.metrics` | `IngestionMetricsCollector` (`iot_ingestion_*`) |
 | `control` | `ControlDecisionEngine`: deadband 기반 순수 판단 → `HEAT_ON`/`HEAT_OFF`/`HOLD` |
-| `controller` | `DeviceController` (`/devices`), `GlobalApiExceptionHandler` |
+| `controller` | `DeviceController` (`/devices`), `DevDashboardDemoController` (`/dev/dashboard-demo`, `local`/`dev` profile 전용), `GlobalApiExceptionHandler` |
 | `service` | `DeviceService` facade → Query / ControlPolicy / Command / CommandReliability 유스케이스 서비스 |
 | `mqtt` | downlink publish Port/Adapter (QoS 1) |
 | `watchdog` | heartbeat 만료 감지 → `DeviceOfflineEvent` → fail-safe publisher (현재는 로깅만 함) |

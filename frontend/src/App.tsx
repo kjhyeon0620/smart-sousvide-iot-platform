@@ -34,6 +34,7 @@ import {
   updateControlPolicy,
   updateDeviceEnabled
 } from './api';
+import { DemoDataPanel } from './DemoDataPanel';
 import type {
   CommandPage,
   CommandType,
@@ -173,6 +174,8 @@ function DeviceListPage({ onSelect }: { onSelect: (id: number) => void }) {
         <SummaryTile icon={<WifiOff size={18} />} label="Offline" value={summary.offline} tone="bad" />
         <SummaryTile icon={<Flame size={18} />} label="Heating" value={summary.heating} tone="warn" />
       </div>
+
+      <DemoDataPanel onChanged={() => loadDevices(true)} />
 
       <div className="filter-row" role="tablist" aria-label="Device filters">
         {(['all', 'online', 'offline', 'disabled', 'heating'] as Filter[]).map((value) => (
@@ -732,4 +735,3 @@ function InlineNotice({ message }: { message: string }) {
     </div>
   );
 }
-
