@@ -10,9 +10,7 @@ branch: feature/#57-dashboard-demo-data-console
 # Dashboard demo data console
 
 > 로컬 기획 노트(2026-05-06)와 GitHub 이슈 #57 본문을 옮겨 온 스펙이다.
-> **구현 현황 (2026-10-01 확인)**: `feature/#57-dashboard-demo-data-console` 브랜치(로컬, 원격)에 구현 커밋 `b6078a9`(2026-06-28)가 있고, PR은 아직 없다.
-> 이 브랜치는 오래된 `main`에서 갈라져서 이미 머지된 #58 커밋(`7ee164d`)을 중복으로 포함한다. 또 삭제된 `docs/user-device-dashboard.md`를 수정한다.
-> 그래서 PR 전에 최신 `main`으로 rebase하고, 문서 변경을 이 스펙과 `device-api.md`, `architecture.md`로 옮겨야 한다.
+> **구현 현황 (2026-10-03)**: `feature/#57-dashboard-demo-data-console` 브랜치를 최신 `main`으로 rebase했다. 이미 머지된 #58 커밋은 중복이라 빠졌고, 삭제된 `docs/user-device-dashboard.md`의 변경은 이 스펙과 `device-api.md`의 "Dev-Only Dashboard Demo API" 섹션으로 옮겼다. PR 전 상태다.
 
 ## 목적 / 성공 조건
 - 목적: 개발자가 curl, MQTT publish, Redis/Influx 수동 조작 없이 UI 버튼으로 대시보드의 상태별 화면(online/offline/disabled/heating/holding/명령 실패·만료)을 재현하고 정리한다.
@@ -55,6 +53,7 @@ branch: feature/#57-dashboard-demo-data-console
 - 2026-06-28 (구현) Q3 → 가용성 조회(`GET /dev/dashboard-demo`)가 404면 패널을 숨긴다. 프론트 플래그는 두지 않는다.
 - 2026-06-28 (구현) Q4 → command sample은 DB row만 만들고 MQTT publish는 하지 않는다.
 - 2026-06-28 (구현) Q5 → scenario를 생성할 때 기존 demo 데이터(MySQL, Redis)를 먼저 정리한다.
+- 2026-10-03 (rebase) API 문서는 `device-api.md`의 "Dev-Only Dashboard Demo API" 섹션을 기준으로 한다. prefix 위반과 지원하지 않는 scenario는 400 `INVALID_REQUEST`(`InvalidDeviceQueryException`)를 반환한다.
 
 ## 완료 증거
 | 증명할 것 | 방법 |
@@ -65,6 +64,7 @@ branch: feature/#57-dashboard-demo-data-console
 | 운영 profile에서 bean 미생성 | context 테스트 |
 | 패널로 5가지 상태 재현 | 로컬 수동 QA + 스크린샷 ([panel](screenshot-panel-desktop.png), [after action](screenshot-panel-after-action.png)) |
 | frontend 빌드 | `cd frontend && npm run build` |
+| 로컬 수동 확인 절차 | `SPRING_PROFILES_ACTIVE=local`로 백엔드 실행 → 접힌 Demo data 패널에서 scenario 생성 → demo 기기, 현재 차트 데이터, 명령 이력 샘플 확인 → clear 후 `SV-DEMO-*` 기기가 목록에서 사라지는지 확인 |
 
 ## Tasks
 ### T1. Backend dev API + prefix 가드
