@@ -8,6 +8,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write   # K-Le-PaaS 배포 요청에 쓰는 GitHub OIDC 토큰 발급
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}/backend
@@ -63,15 +64,18 @@ jobs:
       - name: Trigger K-Le-PaaS deployment
         env:
           KLEPAAS_DEPLOY_URL: ${{ secrets.KLEPAAS_DEPLOY_URL }}
-          KLEPAAS_TOKEN: ${{ secrets.KLEPAAS_TOKEN }}
           KLEPAAS_REPOSITORY_ID: ${{ secrets.KLEPAAS_REPOSITORY_ID }}
           IMAGE_URI: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
         run: |
           test -n "$KLEPAAS_DEPLOY_URL"
-          test -n "$KLEPAAS_TOKEN"
           test -n "$KLEPAAS_REPOSITORY_ID"
+          # 실행마다 발급되는 단기 토큰. K-Le-PaaS가 저장소·브랜치·커밋 claim을 요청과 대조한다
+          OIDC_TOKEN=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=k-le-paas" | jq -r .value)
+          test -n "$OIDC_TOKEN"
+          echo "::add-mask::$OIDC_TOKEN"
           curl --fail-with-body -X POST "$KLEPAAS_DEPLOY_URL" \
-            -H "Authorization: Bearer $KLEPAAS_TOKEN" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{
               \"repository_id\": ${KLEPAAS_REPOSITORY_ID},

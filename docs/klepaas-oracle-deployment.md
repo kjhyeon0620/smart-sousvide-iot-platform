@@ -39,14 +39,23 @@ Configure these secrets in the Smart Sousvide repository:
 
 ```text
 KLEPAAS_DEPLOY_URL
-KLEPAAS_TOKEN
 KLEPAAS_REPOSITORY_ID
 ```
 
 `KLEPAAS_DEPLOY_URL` should point to K-Le-PaaS `POST /api/v1/deployments`.
-`KLEPAAS_TOKEN` must be a K-Le-PaaS token that can create deployments.
 `KLEPAAS_REPOSITORY_ID` is the repository id registered in K-Le-PaaS for this
 ON_PREMISE target.
+
+## Deployment Authentication
+
+The workflow does not store a K-Le-PaaS token. It has `permissions: id-token: write`
+and requests a short-lived GitHub Actions OIDC token with audience `k-le-paas`
+for each run, then sends it as `Authorization: Bearer <token>`.
+
+K-Le-PaaS accepts the request only when the token comes from this repository's
+`main` branch and the request's `repository_id`, `branch_name`, and `commit_hash`
+match the token's repository, ref, and commit. The token can only create
+deployments. See the K-Le-PaaS deployment guide, "CI Deployment Authentication".
 
 Do not commit kubeconfig, GHCR tokens, K-Le-PaaS tokens, database passwords, or
 production runtime secrets to this repository.
