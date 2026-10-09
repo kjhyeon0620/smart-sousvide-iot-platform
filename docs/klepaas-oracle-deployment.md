@@ -12,8 +12,9 @@ The workflow is defined in:
 ```
 
 It runs on `main` branch pushes and supports manual `workflow_dispatch` runs. The
-job runs the focused Gradle test gate first, builds the backend image for
-`linux/arm64`, pushes it to GHCR, then calls the K-Le-PaaS deployment API with
+job runs on a GitHub-hosted ARM runner (`ubuntu-24.04-arm`), runs the focused
+Gradle test gate first, builds the backend image for `linux/arm64` natively
+(no QEMU emulation), pushes it to GHCR, then calls the K-Le-PaaS deployment API with
 the exact image URI.
 
 Image format:
