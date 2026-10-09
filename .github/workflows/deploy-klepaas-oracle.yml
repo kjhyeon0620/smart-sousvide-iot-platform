@@ -16,7 +16,7 @@ env:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm   # 운영 노드와 같은 arm64에서 에뮬레이션 없이 이미지 빌드
 
     steps:
       - name: Checkout
@@ -39,9 +39,6 @@ jobs:
             --tests "com.iot.IoT.control.*" \
             --tests "com.iot.IoT.watchdog.*" \
             --tests "com.iot.IoT.loadtest.*"
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
