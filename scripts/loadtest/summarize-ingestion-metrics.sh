@@ -105,10 +105,27 @@ fi
 CORE_PIPELINE_SUCCESS_RATE="$(awk -v ok="$CORE_PIPELINE_SUCCESS_TOTAL" -v recv="$RECV_TOTAL" 'BEGIN { if (recv == 0) { printf "0.0000" } else { printf "%.4f", ok / recv } }')"
 CORE_PIPELINE_SUCCESS_RATE_PCT="$(awk -v r="$CORE_PIPELINE_SUCCESS_RATE" 'BEGIN { printf "%.2f", r * 100 }')"
 
+# Backend receive rate (recv / published) needs the simulator side; skipped when connection-summary.json is absent.
+RECEIVE_RATE_FIELDS=""
+CONNECTION_SUMMARY="${ATTEMPT_DIR}/connection-summary.json"
+PUBLISHED_TOTAL=""
+if [[ -f "$CONNECTION_SUMMARY" ]]; then
+  PUBLISHED_TOTAL="$(grep -oE '"published_total":[[:space:]]*[0-9]+' "$CONNECTION_SUMMARY" | grep -oE '[0-9]+$' || true)"
+fi
+if [[ -n "$PUBLISHED_TOTAL" ]]; then
+  RECEIVE_RATE="$(awk -v recv="$RECV_TOTAL" -v pub="$PUBLISHED_TOTAL" 'BEGIN { if (pub == 0) { printf "0.0000" } else { printf "%.4f", recv / pub } }')"
+  RECEIVE_RATE_PCT="$(awk -v r="$RECEIVE_RATE" 'BEGIN { printf "%.2f", r * 100 }')"
+  RECEIVE_RATE_FIELDS="
+  \"published_total\": ${PUBLISHED_TOTAL},
+  \"backend_receive_rate\": ${RECEIVE_RATE},
+  \"backend_receive_rate_pct\": ${RECEIVE_RATE_PCT},
+  \"backend_receive_rate_formula\": \"recv_total / published_total\","
+fi
+
 cat > "$SUMMARY_FILE" <<EOF
 {
   "run_id": "${RUN_ID}",
-  "attempt": "${ATTEMPT}",
+  "attempt": "${ATTEMPT}",${RECEIVE_RATE_FIELDS}
   "recv_total": ${RECV_TOTAL},
   "parse_ok_total": ${PARSE_OK_TOTAL},
   "parse_fail_total": ${PARSE_FAIL_TOTAL},
@@ -134,5 +151,8 @@ echo "[DIST] business recv_total=${RECV_TOTAL}"
 echo "[DIST] business pipeline_success_total=${PIPELINE_SUCCESS_TOTAL}"
 echo "[DIST] business pipeline_success_rate=${PIPELINE_SUCCESS_RATE_PCT}%"
 echo "[DIST] business core_pipeline_success_total=${CORE_PIPELINE_SUCCESS_TOTAL}"
+if [[ -n "$PUBLISHED_TOTAL" ]]; then
+  echo "[DIST] business backend_receive_rate=${RECEIVE_RATE_PCT}% (recv/published)"
+fi
 echo "[DIST] business core_pipeline_success_rate=${CORE_PIPELINE_SUCCESS_RATE_PCT}%"
 echo "[DIST] business_summary=${SUMMARY_FILE}"

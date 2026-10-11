@@ -12,6 +12,14 @@ fail() {
   exit 1
 }
 
+assert_not_contains() {
+  local file="$1"
+  local needle="$2"
+  if grep -F -- "$needle" "$file" >/dev/null 2>&1; then
+    fail "unexpected '${needle}' in ${file}"
+  fi
+}
+
 assert_contains() {
   local file="$1"
   local needle="$2"
@@ -112,6 +120,24 @@ test_summarize_ingestion_happy_path() {
   assert_contains "${summary}" '"core_pipeline_success_rate": 0.8500'
   assert_contains "${summary}" '"core_pipeline_success_rate_pct": 85.00'
   assert_contains "${summary}" '"core_pipeline_success_formula": "min(parse_ok_total, redis_ok_total) / recv_total"'
+  assert_not_contains "${summary}" '"backend_receive_rate"'
+}
+
+test_summarize_ingestion_backend_receive_rate_from_connection_summary() {
+  local attempt_dir
+  attempt_dir="$(prepare_attempt_dir run-biz-recv-rate 7)"
+
+  cp "${FIXTURE_DIR}/ingestion/happy/backend.log" "${attempt_dir}/backend.log"
+  printf '{\n  "published_total": 800,\n  "failed_total": 0\n}\n' > "${attempt_dir}/connection-summary.json"
+
+  "${ROOT_DIR}/scripts/loadtest/summarize-ingestion-metrics.sh" "${attempt_dir}" >/dev/null
+
+  local summary="${attempt_dir}/business-summary.json"
+  assert_contains "${summary}" '"published_total": 800'
+  assert_contains "${summary}" '"backend_receive_rate": 0.2500'
+  assert_contains "${summary}" '"backend_receive_rate_pct": 25.00'
+  assert_contains "${summary}" '"backend_receive_rate_formula": "recv_total / published_total"'
+  assert_contains "${summary}" '"core_pipeline_success_rate_pct": 85.00'
 }
 
 test_summarize_ingestion_happy_path_with_influx_bypass_and_core_pipeline_divergence() {
@@ -219,6 +245,7 @@ test_summarize_ingestion_missing_required_totals_key_with_numeric_window_failure
 run_test "summarize-results happy path" test_summarize_results_happy_path
 run_test "summarize-results zero attempted boundary" test_summarize_results_zero_attempted_boundary
 run_test "summarize-ingestion happy path" test_summarize_ingestion_happy_path
+run_test "summarize-ingestion backend receive rate from connection summary" test_summarize_ingestion_backend_receive_rate_from_connection_summary
 run_test "summarize-ingestion happy path with bypass and core divergence" test_summarize_ingestion_happy_path_with_influx_bypass_and_core_pipeline_divergence
 run_test "summarize-ingestion zero recv boundary" test_summarize_ingestion_zero_recv_boundary
 run_test "summarize-ingestion missing totals failure" test_summarize_ingestion_missing_totals_failure

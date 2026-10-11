@@ -1,7 +1,7 @@
 # ADR-0003: Executor-backed MQTT Inbound Channel
 
 ## Status
-Accepted (#45에서 도입, #53에서 비교 측정)
+Accepted (#45에서 도입, #53에서 비교 측정, #70에서 포화 정책과 재연결 보완)
 
 ## Context
 - 기존 direct 채널에서는 broker 수신 스레드가 파싱, 저장, 제어까지 동기로 처리했다. 그래서 downstream이 느려지면 수신 자체가 지연되었다.
@@ -18,9 +18,10 @@ Accepted (#45에서 도입, #53에서 비교 측정)
 
 ## Consequences
 - 장점 (bypass 모드, HiveMQ, 1k/2k/3k 연결): core pipeline 성공률이 direct 89~93%에서 executor 97.6~99.6%로 올랐다. strict 모드(Influx 포함)에서도 98.1~99.9%를 유지했다.
+  - 2026-10-09 주석 (#70): 이 성공률은 backend가 받은 메시지(`recv_total`) 기준이다. 당시 3k의 발행 대비 수신율은 약 2.9~4.5%였다. executor 포화 예외가 구독 연결을 끊었기 때문이다. [`load-test-results.md`](../load-test-results.md) Phase 3 참고.
 - 감수하는 점:
   - 메모리 큐이므로 프로세스가 죽으면 대기 중인 메시지가 유실된다.
-  - 큐가 가득 차면 rejected가 발생한다 (측정 중 관측됨). 백프레셔 정책이 아직 없다.
+  - ~~큐가 가득 차면 rejected가 발생한다 (측정 중 관측됨). 백프레셔 정책이 아직 없다.~~ → 2026-10-09 (#70) 포화 시 호출자(MQTT 수신 스레드)가 직접 처리한다. 수신이 느려지고, 넘친 부하는 broker 큐 초과 드롭으로 옮겨 간다.
   - 처리 순서가 보장되지 않는다. 같은 기기의 메시지가 순서가 바뀐 채 처리될 수 있다.
 
 ## Revisit When

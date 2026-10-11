@@ -1,0 +1,22 @@
+{
+  "run_id": "baseline-mac-direct-bypass-3000-20261009-153352",
+  "attempt": "1",
+  "recv_total": 44219,
+  "parse_ok_total": 39479,
+  "parse_fail_total": 0,
+  "influx_ok_total": 0,
+  "influx_fail_total": 0,
+  "influx_bypass_total": 39479,
+  "redis_ok_total": 39479,
+  "redis_fail_total": 0,
+  "pipeline_success_total": 0,
+  "pipeline_failure_total": 44219,
+  "pipeline_success_rate": 0.0000,
+  "pipeline_success_rate_pct": 0.00,
+  "pipeline_success_formula": "min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total",
+  "core_pipeline_success_total": 39479,
+  "core_pipeline_failure_total": 4740,
+  "core_pipeline_success_rate": 0.8928,
+  "core_pipeline_success_rate_pct": 89.28,
+  "core_pipeline_success_formula": "min(parse_ok_total, redis_ok_total) / recv_total"
+}
