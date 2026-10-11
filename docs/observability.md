@@ -59,6 +59,8 @@ curl -s http://localhost:8080/actuator/prometheus | rg "^iot\\."
 ## Ingestion Notes
 - MQTT inbound channel은 `ingestion.channel.mode=direct|executor`로 전환 가능하다.
 - `executor` 모드에서는 broker 수신 스레드와 downstream 처리 스레드를 느슨하게 분리한다.
+- executor가 포화되면 메시지를 버리거나 예외를 던지지 않고 MQTT 수신 스레드가 직접 처리한다(#70). `iot_ingestion_executor_rejected_total`은 "포화로 호출자가 처리한 횟수"다. 이 값이 늘면 수신이 느려지고, 넘친 부하는 broker 큐에 쌓인다. 큐 한도를 넘으면 broker가 드롭한다(backend 메트릭에는 잡히지 않으므로 broker `$SYS/broker/publish/messages/dropped`를 본다).
+- inbound 연결이 끊기면 Paho가 자동 재연결하고 재구독한다. 끊김은 `Lost connection` ERROR 로그로 보인다.
 - business success 지표는 아래 두 축으로 본다.
   - overall pipeline success: parse 이후 Influx + Redis가 모두 성공한 건수
   - core pipeline success: parse 이후 Redis heartbeat까지 성공한 건수

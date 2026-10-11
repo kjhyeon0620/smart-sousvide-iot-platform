@@ -135,6 +135,12 @@ Split aggregation formulas:
 - connection success rate = `published_total / (published_total + failed_total)`
 - business pipeline success rate = `min(parse_ok_total, influx_ok_total, redis_ok_total) / recv_total`
 - business core pipeline success rate = `min(parse_ok_total, redis_ok_total) / recv_total`
+- backend receive rate = `recv_total / published_total` (`business-summary.json`의 `backend_receive_rate`; 같은 attempt에 `connection-summary.json`이 있을 때만 기록)
+
+Receive-path notes (#70):
+- core/overall rate는 backend가 **받은** 메시지 기준이다. 발행 대비 손실은 backend receive rate와 broker `$SYS/broker/publish/messages/dropped`로 본다.
+- backend 구독 클라이언트 수는 `--spring.mqtt.subscriber-count=N`으로 바꾼다 (기본 1, 2 이상이면 공유 구독).
+- broker와 backend 카운터가 누적값이므로, 비교 측정 전에는 둘 다 재시작한다.
 
 Interpretation note:
 - `overall` down with relatively stable `core` means Influx path is the primary bottleneck candidate.

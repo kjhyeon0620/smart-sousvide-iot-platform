@@ -29,6 +29,7 @@ spring:
     username:
     password:
     default-topic: "sousvide/+/status"
+    subscriber-count: 1
 
 # 4. InfluxDB Configuration
 influxdb:

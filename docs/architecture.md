@@ -42,7 +42,8 @@ HTTP API의 세부 계약은 [`device-api.md`](device-api.md), 결정 근거는 
 
 ```text
 Device ──MQTT publish (sousvide/{deviceId}/status, QoS 1)──▶ Broker
-  ▶ mqttInputChannel (ingestion.channel.mode = executor | direct)
+  ▶ inbound adapter × spring.mqtt.subscriber-count (2 이상이면 $share/ingestion/<topic>, 자동 재연결)
+  ▶ mqttInputChannel (ingestion.channel.mode = executor | direct, executor 포화 시 수신 스레드가 직접 처리)
   ▶ MqttConsumer
        ├─ parse 실패 → parse dead-letter (재처리하지 않음)
        ├─ 중복 (deviceId + rawPayload, 2초 이내) → drop
@@ -142,6 +143,7 @@ idempotency key는 `(devicePk, idempotencyKey)` 단위로 유일하다. 같은 k
 | 키 | 기본값 | 의미 |
 |---|---|---|
 | `spring.mqtt.default-topic` | `sousvide/+/status` | uplink 구독 topic |
+| `spring.mqtt.subscriber-count` | 1 | uplink 구독 클라이언트 수. 2 이상이면 공유 구독(`$share/ingestion/<topic>`)으로 부하를 나누고 기기별 처리 순서는 보장하지 않는다 |
 | `ingestion.channel.mode` | `executor` | `direct` \| `executor` ([ADR-0003](adr/0003-executor-inbound-channel.md)) |
 | `ingestion.executor.core-pool-size` / `max-pool-size` / `queue-capacity` | 4 / 16 / 5000 | executor 채널 풀 |
 | `ingestion.influx.write-mode` | `strict` | `strict` \| `bypass` (부하 테스트에서 Influx 제외용) |

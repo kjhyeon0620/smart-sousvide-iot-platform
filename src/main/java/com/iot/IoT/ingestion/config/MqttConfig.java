@@ -3,12 +3,14 @@ package com.iot.IoT.ingestion.config;
 import com.iot.IoT.ingestion.metrics.IngestionMetricsCollector;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.support.BeanDefinitionBuilder;
+import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.integration.annotation.IntegrationComponentScan;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.channel.ExecutorChannel;
-import org.springframework.integration.core.MessageProducer;
 import org.springframework.integration.mqtt.core.DefaultMqttPahoClientFactory;
 import org.springframework.integration.mqtt.core.MqttPahoClientFactory;
 import org.springframework.integration.mqtt.inbound.MqttPahoMessageDrivenChannelAdapter;
@@ -17,8 +19,9 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
+import java.util.stream.IntStream;
 
 @Configuration
 @IntegrationComponentScan
@@ -26,21 +29,16 @@ public class MqttConfig {
 
     public static final String INGESTION_ENQUEUED_AT_NANOS_HEADER = "ingestionEnqueuedAtNanos";
     private static final String CHANNEL_MODE_DIRECT = "direct";
+    private static final String SHARED_SUBSCRIPTION_GROUP = "ingestion";
 
     @Value("${spring.mqtt.broker-url}")
     private String brokerUrl;
-
-    @Value("${spring.mqtt.client-id}")
-    private String clientId;
 
     @Value("${spring.mqtt.username:}")
     private String username;
 
     @Value("${spring.mqtt.password:}")
     private String password;
-
-    @Value("${spring.mqtt.default-topic}")
-    private String defaultTopic;
 
     @Value("${ingestion.executor.core-pool-size:4}")
     private int executorCorePoolSize;
@@ -102,9 +100,13 @@ public class MqttConfig {
                 task.run();
             };
         });
+        // Saturation must not propagate to the Paho callback: an exception there drops the subscription.
+        // Running on the caller (MQTT receive thread) slows intake instead, so excess load backs up in the broker.
         executor.setRejectedExecutionHandler((task, pool) -> {
             ingestionMetricsCollector.recordExecutorRejected();
-            throw new RejectedExecutionException("mqtt ingestion executor saturated");
+            if (!pool.isShutdown()) {
+                task.run();
+            }
         });
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(10);
@@ -118,6 +120,8 @@ public class MqttConfig {
         MqttConnectOptions options = new MqttConnectOptions();
         options.setServerURIs(new String[]{brokerUrl});
         options.setCleanSession(true);
+        // Spring Integration 7 adapter has no recovery loop; it re-subscribes in connectComplete() after Paho reconnects.
+        options.setAutomaticReconnect(true);
 
         if (!username.isBlank()) {
             options.setUserName(username);
@@ -132,12 +136,39 @@ public class MqttConfig {
     }
 
     @Bean
-    public MessageProducer inbound(MqttPahoClientFactory mqttClientFactory) {
-        MqttPahoMessageDrivenChannelAdapter adapter =
-                new MqttPahoMessageDrivenChannelAdapter(clientId, mqttClientFactory, defaultTopic);
-        adapter.setCompletionTimeout(5_000);
-        adapter.setQos(1);
-        adapter.setOutputChannelName("mqttInputChannel");
-        return adapter;
+    public static BeanDefinitionRegistryPostProcessor inboundAdapterRegistrar(Environment environment) {
+        return registry -> {
+            int subscriberCount = environment.getProperty("spring.mqtt.subscriber-count", Integer.class, 1);
+            String clientId = environment.getRequiredProperty("spring.mqtt.client-id");
+            String topic = environment.getRequiredProperty("spring.mqtt.default-topic");
+            for (InboundSubscription subscription : inboundSubscriptions(subscriberCount, clientId, topic)) {
+                registry.registerBeanDefinition("inbound-" + subscription.clientId(),
+                        BeanDefinitionBuilder.genericBeanDefinition(MqttPahoMessageDrivenChannelAdapter.class)
+                                .addConstructorArgValue(subscription.clientId())
+                                .addConstructorArgReference("mqttClientFactory")
+                                .addConstructorArgValue(new String[]{subscription.topic()})
+                                .addPropertyValue("completionTimeout", 5_000)
+                                .addPropertyValue("qos", 1)
+                                .addPropertyValue("outputChannelName", "mqttInputChannel")
+                                .getBeanDefinition());
+            }
+        };
+    }
+
+    /**
+     * One subscriber keeps the plain topic and client id. More than one splits the load
+     * across clients with a broker shared subscription, so per-device ordering is not guaranteed.
+     */
+    static List<InboundSubscription> inboundSubscriptions(int subscriberCount, String clientId, String topic) {
+        if (subscriberCount <= 1) {
+            return List.of(new InboundSubscription(clientId, topic));
+        }
+        String sharedTopic = "$share/" + SHARED_SUBSCRIPTION_GROUP + "/" + topic;
+        return IntStream.range(0, subscriberCount)
+                .mapToObj(i -> new InboundSubscription(clientId + "-" + i, sharedTopic))
+                .toList();
+    }
+
+    record InboundSubscription(String clientId, String topic) {
     }
 }
