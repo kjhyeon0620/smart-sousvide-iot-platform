@@ -1,0 +1,20 @@
+mistralai/Timestral-5M	threads=1	official 3w@15m->1d	p50=72ms	p95=73ms	per_series=71.9ms
+mistralai/Timestral-5M	threads=1	ours 1d@1m->15m	p50=143ms	p95=144ms	per_series=142.6ms
+mistralai/Timestral-5M	threads=1	ours 1d@1m->15m nosym	p50=72ms	p95=74ms	per_series=71.7ms
+mistralai/Timestral-5M	threads=1	ours batch32	p50=4189ms	p95=4215ms	per_series=130.9ms
+mistralai/Timestral-5M	threads=1	load=4.0s	peak_rss=406MB
+mistralai/Timestral-5M	threads=2	official 3w@15m->1d	p50=57ms	p95=59ms	per_series=56.9ms
+mistralai/Timestral-5M	threads=2	ours 1d@1m->15m	p50=96ms	p95=108ms	per_series=95.7ms
+mistralai/Timestral-5M	threads=2	ours 1d@1m->15m nosym	p50=48ms	p95=56ms	per_series=48.0ms
+mistralai/Timestral-5M	threads=2	ours batch32	p50=2281ms	p95=2322ms	per_series=71.3ms
+mistralai/Timestral-5M	threads=2	load=0.3s	peak_rss=376MB
+mistralai/Timestral-28M	threads=1	official 3w@15m->1d	p50=258ms	p95=262ms	per_series=258.4ms
+mistralai/Timestral-28M	threads=1	ours 1d@1m->15m	p50=594ms	p95=597ms	per_series=593.9ms
+mistralai/Timestral-28M	threads=1	ours 1d@1m->15m nosym	p50=297ms	p95=299ms	per_series=297.3ms
+mistralai/Timestral-28M	threads=1	ours batch32	p50=19709ms	p95=19769ms	per_series=615.9ms
+mistralai/Timestral-28M	threads=1	load=5.3s	peak_rss=564MB
+mistralai/Timestral-28M	threads=2	official 3w@15m->1d	p50=169ms	p95=184ms	per_series=168.7ms
+mistralai/Timestral-28M	threads=2	ours 1d@1m->15m	p50=358ms	p95=397ms	per_series=358.0ms
+mistralai/Timestral-28M	threads=2	ours 1d@1m->15m nosym	p50=184ms	p95=203ms	per_series=184.2ms
+mistralai/Timestral-28M	threads=2	ours batch32	p50=10765ms	p95=10837ms	per_series=336.4ms
+mistralai/Timestral-28M	threads=2	load=0.5s	peak_rss=571MB

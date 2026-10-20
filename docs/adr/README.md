@@ -9,6 +9,7 @@
 | [0002](0002-downlink-command-reliability.md) | Downlink Command Reliability Model | Accepted |
 | [0003](0003-executor-inbound-channel.md) | Executor-backed MQTT Inbound Channel | Accepted |
 | [0004](0004-user-dashboard-delivery.md) | User Dashboard Delivery (Bundled SPA, Polling, No Auth in MVP) | Accepted |
+| [0005](0005-timestral-anomaly-detection-deferred.md) | Timestral 도입 보류, 기기 이상 탐지는 규칙 기반 | Accepted |
 
 ## 규칙
 

@@ -1,0 +1,18 @@
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:00<00:00, 1217.86it/s]
+rules	normal	false_alarm_series=0/40 (0%)
+Timestral-5M	normal	false_alarm_series=17/40 (42%)
+rules	heater_degrade	detected=20/40 (50%)	median_delay=8min	alarm_before_onset=0
+Timestral-5M	heater_degrade	detected=14/40 (35%)	median_delay=7min	alarm_before_onset=6
+rules	sensor_stuck	detected=40/40 (100%)	median_delay=9min	alarm_before_onset=0
+Timestral-5M	sensor_stuck	detected=6/40 (15%)	median_delay=4min	alarm_before_onset=1
+rules	lid_open	detected=38/40 (95%)	median_delay=3min	alarm_before_onset=0
+Timestral-5M	lid_open	detected=34/40 (85%)	median_delay=2min	alarm_before_onset=4
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:00<00:00, 1263.53it/s]
+rules	normal	false_alarm_series=0/40 (0%)
+Timestral-28M	normal	false_alarm_series=10/40 (25%)
+rules	heater_degrade	detected=20/40 (50%)	median_delay=8min	alarm_before_onset=0
+Timestral-28M	heater_degrade	detected=11/40 (28%)	median_delay=7min	alarm_before_onset=1
+rules	sensor_stuck	detected=40/40 (100%)	median_delay=9min	alarm_before_onset=0
+Timestral-28M	sensor_stuck	detected=5/40 (12%)	median_delay=4min	alarm_before_onset=2
+rules	lid_open	detected=38/40 (95%)	median_delay=3min	alarm_before_onset=0
+Timestral-28M	lid_open	detected=35/40 (88%)	median_delay=2min	alarm_before_onset=1
