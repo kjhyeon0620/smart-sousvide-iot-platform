@@ -1,6 +1,7 @@
 package com.iot.IoT.controller;
 
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceAnomalyPageResponse;
 import com.iot.IoT.dto.DeviceCommandPageResponse;
 import com.iot.IoT.dto.DeviceCommandResponse;
 import com.iot.IoT.dto.DeviceControlPolicyResponse;
@@ -110,6 +111,15 @@ public class DeviceController {
             @RequestParam(defaultValue = "0") int limit
     ) {
         return deviceService.getCommands(id, limit);
+    }
+
+    @GetMapping("/{id}/anomalies")
+    public DeviceAnomalyPageResponse getAnomalies(
+            @PathVariable Long id,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int limit
+    ) {
+        return deviceService.getAnomalies(id, status, limit);
     }
 
     @PostMapping("/{id}/commands/{commandId}/ack")

@@ -38,6 +38,7 @@ jobs:
             --tests "com.iot.IoT.ingestion.*" \
             --tests "com.iot.IoT.control.*" \
             --tests "com.iot.IoT.watchdog.*" \
+            --tests "com.iot.IoT.anomaly.*" \
             --tests "com.iot.IoT.loadtest.*"
 
       - name: Set up Docker Buildx

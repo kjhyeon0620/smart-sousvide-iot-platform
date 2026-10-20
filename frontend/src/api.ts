@@ -1,4 +1,5 @@
 import type {
+  AnomalyPage,
   CommandPage,
   CommandType,
   ControlPolicy,
@@ -86,5 +87,9 @@ export function sendCommand(id: number, commandType: CommandType) {
 
 export function getCommands(id: number) {
   return request<CommandPage>(`/devices/${id}/commands?limit=20`);
+}
+
+export function getAnomalies(id: number) {
+  return request<AnomalyPage>(`/devices/${id}/anomalies?limit=10`);
 }
 

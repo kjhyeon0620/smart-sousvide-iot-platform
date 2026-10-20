@@ -56,6 +56,16 @@ control:
 watchdog:
   scan-interval-ms: 30000
   offline-notify-cooldown-seconds: 60
+anomaly:
+  enabled: true
+  target-deviation:
+    threshold-celsius: 1.0
+    duration-seconds: 180
+  heating-stall:
+    duration-seconds: 600
+    min-rise-celsius: 0.0
+  sensor-stuck:
+    duration-seconds: 600
 
 logging:
   level:

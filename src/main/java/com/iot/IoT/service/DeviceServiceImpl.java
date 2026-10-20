@@ -2,6 +2,7 @@ package com.iot.IoT.service;
 
 import com.iot.IoT.control.ControlAction;
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceAnomalyPageResponse;
 import com.iot.IoT.dto.DeviceCommandPageResponse;
 import com.iot.IoT.dto.DeviceCommandResponse;
 import com.iot.IoT.dto.DeviceControlPolicyResponse;
@@ -82,6 +83,11 @@ public class DeviceServiceImpl implements DeviceService {
     @Override
     public DeviceCommandPageResponse getCommands(Long id, int limit) {
         return deviceQueryService.getCommands(id, limit);
+    }
+
+    @Override
+    public DeviceAnomalyPageResponse getAnomalies(Long id, String status, int limit) {
+        return deviceQueryService.getAnomalies(id, status, limit);
     }
 
     @Override

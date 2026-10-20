@@ -340,3 +340,33 @@ SIM_TASK=mqttLoadTestHive RUN_ID="executor-strict-3000-clean-retry-$(date +%Y%m%
 - 공유 구독을 쓰면 같은 기기의 메시지 처리 순서가 보장되지 않는다 (executor 모드에서도 이미 보장되지 않았다).
 - 남은 drop을 줄이려면 처리량 자체(메시지당 INFO 로그, Redis 동기 호출 등)를 개선하거나 브로커 측 흐름 제어를 검토해야 한다. 이번 범위 밖이다.
 
+
+## Anomaly Evaluation Overhead (#75)
+
+### Objective
+- ingestion에 추가한 이상 판정 단계(`DeviceAnomalyService.evaluate`)가 메시지 처리 지연을 늘리는지 확인한다.
+- 스펙: [`docs/specs/0075-rule-based-anomaly-detection/spec.md`](specs/0075-rule-based-anomaly-detection/spec.md)
+
+### Test Conditions
+- Host: #70과 같은 Mac (10 CPU cores, RAM 32GB, Java 17), Mosquitto 2.0 (Docker)
+- Simulator: `SIM_TASK=mqttLoadTestHive ./scripts/loadtest/run-distributed.sh 3000 4 120 1 60 1`
+- Backend: `java -jar`, `executor` + `bypass`, 구독자 1개. 차이는 `--anomaly.enabled=true|false` 하나다. 매 실행마다 broker와 backend를 재시작했다.
+- 지연 percentile은 측정할 때만 `--management.metrics.distribution.percentiles.iot.ingestion.{processing,e2e}.latency=0.5,0.95,0.99`로 켜고, 시뮬레이터 종료 직후 `/actuator/prometheus`에서 읽었다 (`prometheus-latency.txt`).
+- 시뮬레이터 기기는 미등록이고 60초 안에 이상 조건이 성립하지 않는다. 측정 대상은 판정 계산 자체의 비용이다 (opened/resolved 0건).
+
+### Results
+| Run | anomaly | Published | Backend recv | Receive rate | processing p50 | processing p95 | processing p99 | e2e p95 | Run ID |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | off | `181500` | `110298` | `60.77%` | `3.9ms` | `10.0ms` | `37.7ms` | `503ms` | `anomaly-off-executor-bypass-3000-20261020-213506` |
+| 2 | on | `180750` | `153517` | `84.93%` | `3.7ms` | `8.9ms` | `27.3ms` | `839ms` | `anomaly-on-executor-bypass-3000-20261020-213636` |
+| 3 | off | `181500` | `107639` | `59.31%` | `3.8ms` | `11.0ms` | `50.3ms` | `386ms` | `anomaly-off2-executor-bypass-3000-20261020-213839` |
+| 4 | on | `181500` | `75013` | `41.33%` | `3.9ms` | `9.4ms` | `65.0ms` | `285ms` | `anomaly-on2-executor-bypass-3000-20261020-214022` |
+
+### Interpretation
+- 메시지 처리 지연(processing)은 on/off 차이가 실행 간 편차보다 작다 (p50 `3.7~3.9ms`, p95 `8.9~11.0ms`). 판정 단계의 오버헤드는 이 측정으로 구분되지 않는다.
+- **수신율은 A/B 지표로 쓸 수 없다.** 같은 조건에서 `41.33%`~`84.93%`로 흔들렸다. 이 호스트에서 backend 처리량이 발행량보다 낮아 broker 큐 드롭이 생기는 포화 상태라, 드롭 양이 실행마다 크게 달라진다. #70의 단일 측정 수신율(`60.57%`)도 이 편차 범위 안에서 해석해야 한다.
+- e2e 지연은 대기열 길이에 따라 달라져(수신량이 많을수록 길다) 판정 비용 비교에 쓰지 않는다.
+
+### Limitations
+- 각 조건 2회씩이다. 지연 percentile은 Micrometer 클라이언트 측 추정값(감쇠 창)이다.
+- 이상 전이가 일어나는 부하(MySQL 쓰기 동반)는 측정하지 않았다. 전이는 기기당 드물게 일어난다는 전제다.

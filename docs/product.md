@@ -75,6 +75,7 @@ connection success와 business pipeline success는 **분리해서** 평가한다
 | Ingestion 지연 계측, executor 모드 비교 | 완료 | #53 |
 | 사용자 대시보드 MVP | 완료 | #55, #60 |
 | K-Le-PaaS Oracle 배포 워크플로 | 완료 | #58 |
+| 규칙 기반 기기 이상 탐지 (목표 이탈, 가열 정체, 센서 고착) | 완료 | #75 |
 
 알려진 격차는 [`architecture.md` §9](architecture.md#9-알려진-격차)에 정리했다.
 

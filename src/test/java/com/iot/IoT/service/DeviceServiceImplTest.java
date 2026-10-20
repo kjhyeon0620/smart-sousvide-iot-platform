@@ -8,6 +8,13 @@ import com.iot.IoT.dto.DeviceControlPolicyResponse;
 import com.iot.IoT.dto.DevicePageResponse;
 import com.iot.IoT.dto.DeviceResponse;
 import com.iot.IoT.dto.DeviceStatusResponse;
+import com.iot.IoT.dto.DeviceAnomalyPageResponse;
+import com.iot.IoT.anomaly.AnomalyType;
+import com.iot.IoT.entity.AnomalyStatus;
+import com.iot.IoT.entity.DeviceAnomaly;
+import com.iot.IoT.repository.DeviceAnomalyRepository;
+import com.iot.IoT.service.exception.InvalidDeviceQueryException;
+import org.springframework.data.domain.Pageable;
 import com.iot.IoT.dto.DeviceTemperaturePointResponse;
 import com.iot.IoT.dto.DeviceTemperatureSeriesResponse;
 import com.iot.IoT.entity.Device;
@@ -50,6 +57,7 @@ class DeviceServiceImplTest {
 
     private DeviceRepository deviceRepository;
     private DeviceCommandRepository deviceCommandRepository;
+    private DeviceAnomalyRepository deviceAnomalyRepository;
     private WatchdogStatePort watchdogStatePort;
     private TemperatureTimeSeriesQueryPort temperatureTimeSeriesQueryPort;
     private DeviceCommandPublisherPort deviceCommandPublisherPort;
@@ -60,6 +68,7 @@ class DeviceServiceImplTest {
     void setUp() {
         deviceRepository = Mockito.mock(DeviceRepository.class);
         deviceCommandRepository = Mockito.mock(DeviceCommandRepository.class);
+        deviceAnomalyRepository = Mockito.mock(DeviceAnomalyRepository.class);
         watchdogStatePort = Mockito.mock(WatchdogStatePort.class);
         temperatureTimeSeriesQueryPort = Mockito.mock(TemperatureTimeSeriesQueryPort.class);
         deviceCommandPublisherPort = Mockito.mock(DeviceCommandPublisherPort.class);
@@ -67,6 +76,7 @@ class DeviceServiceImplTest {
         DeviceQueryService deviceQueryService = new DeviceQueryService(
                 deviceRepository,
                 deviceCommandRepository,
+                deviceAnomalyRepository,
                 watchdogStatePort,
                 temperatureTimeSeriesQueryPort,
                 120
@@ -187,12 +197,49 @@ class DeviceServiceImplTest {
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
         when(watchdogStatePort.findLastSeen("SV-001")).thenReturn(Optional.of(now.minusSeconds(10)));
         when(temperatureTimeSeriesQueryPort.findLatest("SV-001")).thenReturn(Optional.of(latest));
+        when(deviceAnomalyRepository.findByDevicePkAndStatusOrderByDetectedAtAsc(1L, AnomalyStatus.OPEN))
+                .thenReturn(List.of(sampleAnomaly(AnomalyType.SENSOR_STUCK, AnomalyStatus.OPEN)));
 
         DeviceStatusResponse response = deviceService.getStatus(1L);
 
         assertEquals("SV-001", response.deviceId());
         assertEquals(true, response.online());
         assertEquals(DeviceState.HEATING, response.latestState());
+        assertEquals(1, response.openAnomalies().size());
+        assertEquals(AnomalyType.SENSOR_STUCK, response.openAnomalies().get(0).type());
+    }
+
+    @Test
+    @DisplayName("Should filter anomalies by status with default limit")
+    void getAnomalies_filtersByStatus() {
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(sampleDevice(1L, "SV-001", true)));
+        when(deviceAnomalyRepository.findByDevicePkAndStatusOrderByDetectedAtDesc(eq(1L), eq(AnomalyStatus.RESOLVED), any(Pageable.class)))
+                .thenReturn(List.of(sampleAnomaly(AnomalyType.HEATING_STALL, AnomalyStatus.RESOLVED)));
+
+        DeviceAnomalyPageResponse response = deviceService.getAnomalies(1L, "resolved", 0);
+
+        assertEquals(20, response.limit());
+        assertEquals(AnomalyType.HEATING_STALL, response.items().get(0).type());
+        verify(deviceAnomalyRepository, never()).findByDevicePkOrderByDetectedAtDesc(any(), any());
+    }
+
+    @Test
+    @DisplayName("Should reject unknown anomaly status and out-of-range limit")
+    void getAnomalies_invalidParams() {
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(sampleDevice(1L, "SV-001", true)));
+
+        assertThrows(InvalidDeviceQueryException.class, () -> deviceService.getAnomalies(1L, "CLOSED", 0));
+        assertThrows(InvalidDeviceQueryException.class, () -> deviceService.getAnomalies(1L, null, 101));
+    }
+
+    private static DeviceAnomaly sampleAnomaly(AnomalyType type, AnomalyStatus status) {
+        DeviceAnomaly anomaly = new DeviceAnomaly();
+        anomaly.setDevicePk(1L);
+        anomaly.setDeviceId("SV-001");
+        anomaly.setType(type);
+        anomaly.setStatus(status);
+        anomaly.setDetectedAt(Instant.parse("2026-10-20T00:00:00Z"));
+        return anomaly;
     }
 
     @Test

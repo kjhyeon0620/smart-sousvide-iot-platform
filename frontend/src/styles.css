@@ -244,6 +244,17 @@ h2 {
   color: #b7472a;
 }
 
+.anomaly-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.anomaly-pills .pill {
+  gap: 4px;
+}
+
 .card-actions {
   display: flex;
   justify-content: flex-end;

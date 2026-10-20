@@ -1,6 +1,7 @@
 package com.iot.IoT.service;
 
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceAnomalyPageResponse;
 import com.iot.IoT.dto.DeviceCommandPageResponse;
 import com.iot.IoT.dto.DeviceCommandResponse;
 import com.iot.IoT.dto.DeviceControlPolicyResponse;
@@ -36,6 +37,8 @@ public interface DeviceService {
     DeviceCommandPageResponse getCommands(Long id, int limit);
 
     DeviceCommandResponse acknowledgeCommand(Long id, Long commandId);
+
+    DeviceAnomalyPageResponse getAnomalies(Long id, String status, int limit);
 
     void sendAutoControlCommand(String deviceId, ControlAction commandType, Instant decidedAt);
 

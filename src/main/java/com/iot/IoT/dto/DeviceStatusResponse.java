@@ -4,6 +4,7 @@ import com.iot.IoT.ingestion.dto.DeviceState;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 public record DeviceStatusResponse(
         Long id,
@@ -15,6 +16,7 @@ public record DeviceStatusResponse(
         BigDecimal latestTemp,
         BigDecimal latestTargetTemp,
         DeviceState latestState,
-        Instant latestOccurredAt
+        Instant latestOccurredAt,
+        List<OpenAnomalyResponse> openAnomalies
 ) {
 }
