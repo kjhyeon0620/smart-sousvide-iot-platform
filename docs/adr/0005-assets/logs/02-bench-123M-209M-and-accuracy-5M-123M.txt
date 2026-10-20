@@ -1,0 +1,27 @@
+0
+mistralai/Timestral-123M	threads=1	official 3w@15m->1d	p50=991ms	p95=1001ms	per_series=991.2ms
+mistralai/Timestral-123M	threads=1	ours 1d@1m->15m	p50=2547ms	p95=2568ms	per_series=2546.7ms
+mistralai/Timestral-123M	threads=1	ours 1d@1m->15m nosym	p50=1268ms	p95=1278ms	per_series=1268.1ms
+mistralai/Timestral-123M	threads=1	load=1.3s	peak_rss=1242MB
+mistralai/Timestral-123M	threads=2	official 3w@15m->1d	p50=591ms	p95=650ms	per_series=590.8ms
+mistralai/Timestral-123M	threads=2	ours 1d@1m->15m	p50=1383ms	p95=1439ms	per_series=1383.2ms
+mistralai/Timestral-123M	threads=2	ours 1d@1m->15m nosym	p50=686ms	p95=720ms	per_series=686.4ms
+mistralai/Timestral-123M	threads=2	load=1.1s	peak_rss=1241MB
+mistralai/Timestral-209M	threads=1	official 3w@15m->1d	p50=1728ms	p95=1743ms	per_series=1728.5ms
+mistralai/Timestral-209M	threads=1	ours 1d@1m->15m	p50=4321ms	p95=4344ms	per_series=4320.7ms
+mistralai/Timestral-209M	threads=1	ours 1d@1m->15m nosym	p50=2211ms	p95=2225ms	per_series=2210.8ms
+mistralai/Timestral-209M	threads=1	load=27.1s	peak_rss=1904MB
+mistralai/Timestral-209M	threads=2	official 3w@15m->1d	p50=983ms	p95=1040ms	per_series=982.7ms
+mistralai/Timestral-209M	threads=2	ours 1d@1m->15m	p50=2413ms	p95=2493ms	per_series=2412.6ms
+mistralai/Timestral-209M	threads=2	ours 1d@1m->15m nosym	p50=1212ms	p95=1283ms	per_series=1211.9ms
+mistralai/Timestral-209M	threads=2	load=1.9s	peak_rss=1905MB
+=== accuracy
+mistralai/Timestral-5M	sym=True	MAE=0.228C	WQL=0.00275	cover98=97.7%	width98=1.81C
+mistralai/Timestral-5M	sym=False	MAE=0.232C	WQL=0.00282	cover98=97.3%	width98=1.79C
+mistralai/Timestral-5M	mean|median(sym)-median(nosym)|=0.042C
+mistralai/Timestral-28M	sym=True	MAE=0.220C	WQL=0.00267	cover98=97.5%	width98=1.53C
+mistralai/Timestral-28M	sym=False	MAE=0.222C	WQL=0.00269	cover98=97.1%	width98=1.51C
+mistralai/Timestral-28M	mean|median(sym)-median(nosym)|=0.026C
+mistralai/Timestral-123M	sym=True	MAE=0.196C	WQL=0.00239	cover98=97.7%	width98=1.42C
+mistralai/Timestral-123M	sym=False	MAE=0.199C	WQL=0.00242	cover98=98.2%	width98=1.42C
+mistralai/Timestral-123M	mean|median(sym)-median(nosym)|=0.026C
