@@ -28,6 +28,7 @@ HTTP API의 세부 계약은 [`device-api.md`](device-api.md), 결정 근거는 
 | `ingestion.config` | MQTT inbound(`direct`/`executor` 채널), Influx, Jackson 설정 |
 | `ingestion.metrics` | `IngestionMetricsCollector` (`iot_ingestion_*`) |
 | `control` | `ControlDecisionEngine`: deadband 기반 순수 판단 → `HEAT_ON`/`HEAT_OFF`/`HOLD` |
+| `anomaly` | `AnomalyDetector`: 목표 이탈·가열 정체·센서 고착 순수 판정. `DeviceAnomalyService`: 기기별 판정 상태(메모리)와 OPEN/RESOLVED 전이 저장. 근거: [ADR-0005](adr/0005-timestral-anomaly-detection-deferred.md) |
 | `controller` | `DeviceController` (`/devices`), `DevDashboardDemoController` (`/dev/dashboard-demo`, `local`/`dev` profile 전용), `GlobalApiExceptionHandler` |
 | `service` | `DeviceService` facade → Query / ControlPolicy / Command / CommandReliability 유스케이스 서비스 |
 | `mqtt` | downlink publish Port/Adapter (QoS 1) |
@@ -51,12 +52,15 @@ Device ──MQTT publish (sousvide/{deviceId}/status, QoS 1)──▶ Broker
     DeviceIngestionServiceImpl.ingest
        ├─ Influx write (write-mode=bypass이면 생략)   실패 → storage replay candidate
        ├─ Redis heartbeat 갱신                         실패 → storage replay candidate
-       └─ ControlDecisionEngine.decide(message)
-            └─ DeviceCommandService.sendAutoControlCommand
-                  (HOLD, 미등록 기기, disabled 기기는 발행하지 않음)  실패 → control replay candidate
+       ├─ ControlDecisionEngine.decide(message)
+       │    └─ DeviceCommandService.sendAutoControlCommand
+       │          (HOLD, 미등록 기기, disabled 기기는 발행하지 않음)  실패 → control replay candidate
+       └─ DeviceAnomalyService.evaluate (anomaly.enabled=false면 생략)
+            기기별 메모리 상태로 규칙 판정 → OPEN/RESOLVED 전이 때만 MySQL 저장   실패 → iot_anomaly_evaluation_failures_total
 ```
 
 - 각 단계는 서로 독립적으로 실패한다. Influx가 실패해도 Redis 갱신과 제어 판단은 계속 진행한다.
+- 이상 판정 규칙: `TARGET_DEVIATION`(목표 도달 뒤 `|temp - targetTemp| > threshold`가 duration 이상), `HEATING_STALL`(HEATING 중 duration 동안 상승 ≤ min-rise, 체크포인트 방식이라 최대 2×duration), `SENSOR_STUCK`(duration 동안 값 변화 없음). `state=OFF`면 상태를 초기화하고 OPEN을 해소한다. 시간은 서버 수신 시각 기준이다.
 - **core pipeline success**는 Redis 갱신 성공, **overall pipeline success**는 Influx와 Redis 둘 다 성공한 경우다.
 
 ### 3.2 Downlink (명령 → ACK)
@@ -114,6 +118,8 @@ WatchdogScheduler (watchdog.scan-interval-ms)
 | Redis | `devices:active` (set) | watchdog 추적 대상 | 영구 |
 | Redis | `watchdog:{deviceId}:offline-notified` | 오프라인 중복 알림 방지 | cooldown |
 | Influx | measurement `device_status`, tag `deviceId`, fields `temp`, `targetTemp`, `state` | 온도 시계열 | bucket retention |
+| MySQL | `device_anomalies` | 이상 이력. `type`, `status`(`OPEN`/`RESOLVED`), `detected_at`, `resolved_at`, `detail`. (기기, 유형)마다 OPEN 최대 1개. 등록 기기만 저장 | 영구 |
+| 메모리 | 이상 판정 상태 (`deviceId` → 판정 창, OPEN 유형) | 인스턴스별. 시작 시 MySQL OPEN을 읽어 맞춘다 | 프로세스 수명 |
 
 - 스키마는 JPA `ddl-auto: update`로 관리한다. 마이그레이션 도구는 쓰지 않는다 (§9 참고).
 
@@ -157,6 +163,10 @@ idempotency key는 `(devicePk, idempotencyKey)` 단위로 유일하다. 같은 k
 | `downlink.reliability.scan-interval-ms` | 5000 | 신뢰성 스케줄러 주기 |
 | `watchdog.scan-interval-ms` | 30000 (yml) | watchdog 주기 |
 | `watchdog.offline-notify-cooldown-seconds` | 60 | 오프라인 알림 cooldown |
+| `anomaly.enabled` | `true` | 이상 판정 사용 여부 |
+| `anomaly.target-deviation.threshold-celsius` / `duration-seconds` | 1.0 / 180 | 목표 이탈 기준 |
+| `anomaly.heating-stall.duration-seconds` / `min-rise-celsius` | 600 / 0.0 | 가열 정체 기준 |
+| `anomaly.sensor-stuck.duration-seconds` | 600 | 센서 고착 기준 |
 | `APP_ENV` | `local` | 메트릭 `env` 태그 |
 
 새 설정 키를 추가하면 이 표에 함께 추가한다.
@@ -182,4 +192,5 @@ idempotency key는 `(devicePk, idempotencyKey)` 단위로 유일하다. 같은 k
 | 인증과 소유권이 없다. Prometheus endpoint가 `unrestricted`다 | 누구나 모든 기기를 조회하고 제어할 수 있다 | product §6 #3, #12 |
 | 스키마를 `ddl-auto: update`로 관리한다 | 스키마 변경 이력이 남지 않고 롤백이 어렵다 | 미정 |
 | fail-safe 이벤트가 로깅만 한다 | 사용자에게 알림이 가지 않는다 | product §6 #8 |
+| 이상 판정 상태가 인스턴스 메모리에 있다 | 재시작하면 판정 창이 다시 쌓여 탐지가 최대 duration만큼 늦어진다. 공유 구독·다중 인스턴스에서는 기기 메시지가 나뉘어 판정이 부정확하다 | 미정 (#75) |
 | 테스트가 적다 (파서, 제어, ingestion, watchdog, controller, 서비스 facade) | 신뢰성 스케줄러와 명령 서비스에 전용 테스트가 없다 | #63 |

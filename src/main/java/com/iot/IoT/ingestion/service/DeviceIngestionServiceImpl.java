@@ -1,5 +1,6 @@
 package com.iot.IoT.ingestion.service;
 
+import com.iot.IoT.anomaly.DeviceAnomalyService;
 import com.iot.IoT.control.ControlAction;
 import com.iot.IoT.control.ControlDecisionEngine;
 import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
@@ -25,6 +26,7 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
     private final ControlDecisionEngine controlDecisionEngine;
     private final IngestionMetricsCollector ingestionMetricsCollector;
     private final DeviceService deviceService;
+    private final DeviceAnomalyService deviceAnomalyService;
     private final String influxWriteMode;
 
     public DeviceIngestionServiceImpl(
@@ -33,6 +35,7 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
             ControlDecisionEngine controlDecisionEngine,
             IngestionMetricsCollector ingestionMetricsCollector,
             DeviceService deviceService,
+            DeviceAnomalyService deviceAnomalyService,
             @Value("${ingestion.influx.write-mode:strict}") String influxWriteMode
     ) {
         this.temperatureTimeSeriesPort = temperatureTimeSeriesPort;
@@ -40,6 +43,7 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
         this.controlDecisionEngine = controlDecisionEngine;
         this.ingestionMetricsCollector = ingestionMetricsCollector;
         this.deviceService = deviceService;
+        this.deviceAnomalyService = deviceAnomalyService;
         this.influxWriteMode = influxWriteMode;
     }
 
@@ -112,6 +116,12 @@ public class DeviceIngestionServiceImpl implements DeviceIngestionService {
                     message.deviceId(), ex);
         } finally {
             ingestionMetricsCollector.recordControlDispatchLatency(System.nanoTime() - controlDispatchStartedAtNanos);
+        }
+
+        try {
+            deviceAnomalyService.evaluate(message, now);
+        } catch (RuntimeException ex) {
+            log.error("[ANOMALY] Anomaly evaluation step failed. deviceId={}", message.deviceId(), ex);
         }
     }
 

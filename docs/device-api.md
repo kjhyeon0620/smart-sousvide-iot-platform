@@ -83,9 +83,13 @@ HTTP API 계약의 기준 문서다. 계약을 바꾸는 이슈는 스펙에서 
   "latestTemp": 60.1,
   "latestTargetTemp": 65.0,
   "latestState": "HEATING",
-  "latestOccurredAt": "2026-03-02T00:00:00Z"
+  "latestOccurredAt": "2026-03-02T00:00:00Z",
+  "openAnomalies": [
+    { "type": "TARGET_DEVIATION", "detectedAt": "2026-03-02T00:00:00Z" }
+  ]
 }
 ```
+- `openAnomalies`: 진행 중인 이상. 없으면 빈 배열. 유형은 12) 참고.
 - Responses:
   - `200 OK`
   - `404 Not Found`
@@ -198,6 +202,36 @@ HTTP API 계약의 기준 문서다. 계약을 바꾸는 이슈는 스펙에서 
 - Responses:
   - `200 OK` (`ACKED`)
   - `404 Not Found` (`DEVICE_NOT_FOUND`, `COMMAND_NOT_FOUND`)
+
+### 12) GET /devices/{id}/anomalies?status={OPEN|RESOLVED}&limit={n}
+- 설명: 디바이스 이상 이력을 최신 `detectedAt` 순으로 조회한다. ([spec 0075](specs/0075-rule-based-anomaly-detection/spec.md))
+- Query params:
+  - `status` optional. `OPEN` | `RESOLVED` (대소문자 무시). 생략하면 전체
+  - `limit` optional (기본: `20`, 허용 범위 `1..100`)
+- Response example:
+```json
+{
+  "devicePk": 1,
+  "deviceId": "SV-001",
+  "limit": 20,
+  "items": [
+    {
+      "id": 7,
+      "type": "SENSOR_STUCK",
+      "status": "RESOLVED",
+      "detectedAt": "2026-10-20T12:31:13Z",
+      "resolvedAt": "2026-10-20T12:31:22Z",
+      "detail": "temp=60.0, targetTemp=60.0, state=HOLDING"
+    }
+  ]
+}
+```
+- `type`: `TARGET_DEVIATION`(목표 도달 뒤 목표에서 벗어남), `HEATING_STALL`(가열 중 온도가 오르지 않음), `SENSOR_STUCK`(측정값이 바뀌지 않음)
+- `detail`: 이상이 열린 시점의 telemetry 요약
+- Responses:
+  - `200 OK`
+  - `404 Not Found`
+  - `400 Bad Request` (invalid `status` or `limit`)
 
 ## Dev-Only Dashboard Demo API
 

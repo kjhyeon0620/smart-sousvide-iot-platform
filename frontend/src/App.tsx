@@ -24,6 +24,7 @@ import {
   YAxis
 } from 'recharts';
 import {
+  getAnomalies,
   getCommands,
   getControlPolicy,
   getDevice,
@@ -36,6 +37,7 @@ import {
 } from './api';
 import { DemoDataPanel } from './DemoDataPanel';
 import type {
+  AnomalyPage,
   CommandPage,
   CommandType,
   ControlPolicy,
@@ -45,7 +47,7 @@ import type {
   TemperaturePoint,
   TemperatureSeries
 } from './types';
-import { commandStatusTone, displayName, formatDateTime, formatTemp, relativeTime, stateLabel } from './utils';
+import { anomalyLabel, commandStatusTone, displayName, formatDateTime, formatTemp, relativeTime, stateLabel } from './utils';
 
 type Filter = 'all' | 'online' | 'offline' | 'disabled' | 'heating';
 type RangeHours = 1 | 6 | 24;
@@ -244,6 +246,16 @@ function DeviceCard({
           <Metric label="State" value={stateLabel(status)} />
         </div>
         <p className={online ? 'last-seen' : 'last-seen offline'}>{relativeTime(status?.lastSeenAt)}</p>
+        {status?.openAnomalies && status.openAnomalies.length > 0 && (
+          <div className="anomaly-pills">
+            {status.openAnomalies.map((anomaly) => (
+              <span key={anomaly.type} className="pill bad">
+                <AlertTriangle size={12} />
+                {anomalyLabel(anomaly.type)}
+              </span>
+            ))}
+          </div>
+        )}
       </button>
       <div className="card-actions">
         <Toggle checked={enabled} onChange={onToggle} label="Enabled" />
@@ -259,6 +271,7 @@ function DeviceDetailPage({ deviceId, onBack }: { deviceId: number; onBack: () =
   const [temps, setTemps] = useState<LoadState<TemperatureSeries>>(emptyState);
   const [policy, setPolicy] = useState<LoadState<ControlPolicy>>(emptyState);
   const [commands, setCommands] = useState<LoadState<CommandPage>>(emptyState);
+  const [anomalies, setAnomalies] = useState<LoadState<AnomalyPage>>(emptyState);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -267,23 +280,27 @@ function DeviceDetailPage({ deviceId, onBack }: { deviceId: number; onBack: () =
     setStatus((prev) => ({ ...prev, loading: true, error: null }));
     setPolicy((prev) => ({ ...prev, loading: true, error: null }));
     setCommands((prev) => ({ ...prev, loading: true, error: null }));
+    setAnomalies((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const [deviceResponse, statusResponse, policyResponse, commandsResponse] = await Promise.all([
+      const [deviceResponse, statusResponse, policyResponse, commandsResponse, anomaliesResponse] = await Promise.all([
         getDevice(deviceId),
         getDeviceStatus(deviceId),
         getControlPolicy(deviceId),
-        getCommands(deviceId)
+        getCommands(deviceId),
+        getAnomalies(deviceId)
       ]);
       setDevice({ loading: false, error: null, data: deviceResponse });
       setStatus({ loading: false, error: null, data: statusResponse });
       setPolicy({ loading: false, error: null, data: policyResponse });
       setCommands({ loading: false, error: null, data: commandsResponse });
+      setAnomalies({ loading: false, error: null, data: anomaliesResponse });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load device';
       setDevice((prev) => ({ ...prev, loading: false, error: message }));
       setStatus((prev) => ({ ...prev, loading: false, error: message }));
       setPolicy((prev) => ({ ...prev, loading: false, error: message }));
       setCommands((prev) => ({ ...prev, loading: false, error: message }));
+      setAnomalies((prev) => ({ ...prev, loading: false, error: message }));
     }
   }, [deviceId]);
 
@@ -300,9 +317,14 @@ function DeviceDetailPage({ deviceId, onBack }: { deviceId: number; onBack: () =
     loadDetail();
     const id = window.setInterval(async () => {
       try {
-        const [statusResponse, commandsResponse] = await Promise.all([getDeviceStatus(deviceId), getCommands(deviceId)]);
+        const [statusResponse, commandsResponse, anomaliesResponse] = await Promise.all([
+          getDeviceStatus(deviceId),
+          getCommands(deviceId),
+          getAnomalies(deviceId)
+        ]);
         setStatus({ loading: false, error: null, data: statusResponse });
         setCommands({ loading: false, error: null, data: commandsResponse });
+        setAnomalies({ loading: false, error: null, data: anomaliesResponse });
       } catch (error) {
         setStatus((prev) => ({
           ...prev,
@@ -387,6 +409,13 @@ function DeviceDetailPage({ deviceId, onBack }: { deviceId: number; onBack: () =
         </div>
       )}
 
+      {currentStatus?.openAnomalies?.map((anomaly) => (
+        <div key={anomaly.type} className="offline-band">
+          <AlertTriangle size={18} />
+          {anomalyLabel(anomaly.type)} since {formatDateTime(anomaly.detectedAt)}. Check the bath, heater, and sensor.
+        </div>
+      ))}
+
       <div className="detail-grid">
         <section className="panel state-panel">
           <div className="panel-heading">
@@ -436,6 +465,8 @@ function DeviceDetailPage({ deviceId, onBack }: { deviceId: number; onBack: () =
         <CommandPanel status={currentStatus} commands={commands} onSend={issueCommand} onRefresh={async () => {
           setCommands({ loading: false, error: null, data: await getCommands(deviceId) });
         }} />
+
+        <AnomalyPanel anomalies={anomalies} />
       </div>
     </section>
   );
@@ -598,6 +629,47 @@ function CommandPanel({
                   </td>
                   <td>{formatDateTime(command.requestedAt)}</td>
                   <td>{formatDateTime(command.sentAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AnomalyPanel({ anomalies }: { anomalies: LoadState<AnomalyPage> }) {
+  return (
+    <section className="panel command-panel">
+      <div className="panel-heading">
+        <h2>Anomalies</h2>
+      </div>
+      {anomalies.loading && !anomalies.data && <LoadingPanel label="Loading anomalies" compact />}
+      {anomalies.error && <InlineAlert message={anomalies.error} />}
+      {!anomalies.loading && !anomalies.error && anomalies.data?.items.length === 0 && (
+        <EmptyPanel title="No anomalies" body="Off-target, stalled heating, and stuck sensor events will appear here." compact />
+      )}
+      {anomalies.data && anomalies.data.items.length > 0 && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Detected</th>
+                <th>Resolved</th>
+              </tr>
+            </thead>
+            <tbody>
+              {anomalies.data.items.map((anomaly) => (
+                <tr key={anomaly.id} title={anomaly.detail ?? undefined}>
+                  <td>{anomalyLabel(anomaly.type)}</td>
+                  <td>
+                    <span className={`pill ${anomaly.status === 'OPEN' ? 'bad' : 'neutral'}`}>{anomaly.status}</span>
+                  </td>
+                  <td>{formatDateTime(anomaly.detectedAt)}</td>
+                  <td>{anomaly.resolvedAt ? formatDateTime(anomaly.resolvedAt) : '--'}</td>
                 </tr>
               ))}
             </tbody>

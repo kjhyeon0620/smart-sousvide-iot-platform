@@ -90,6 +90,17 @@
   - parse invalid는 재처리하지 않음
   - storage/control failure는 복구 후 재처리 대상 후보로 별도 취급
 
+### 6) 기기 이상(Anomaly) 증가
+- 증상: `iot_anomaly_opened_total` 증가, 대시보드 기기 카드에 이상 배지
+- 점검:
+  - 유형별로 본다. `SENSOR_STUCK`이 여러 기기에서 동시에 늘면 기기보다 수신 경로(같은 payload 반복, 시뮬레이터)를 먼저 의심한다
+  - `TARGET_DEVIATION`이 목표 변경 직후에 몰리면 `anomaly.target-deviation.*` 임계값이 너무 짧은지 확인한다
+  - `iot_anomaly_evaluation_failures_total`이 함께 늘면 MySQL 상태를 확인한다. 저장 실패 시 다음 메시지에서 다시 시도한다
+  - 공유 구독(`spring.mqtt.subscriber-count >= 2`)이나 다중 인스턴스면 판정이 부정확하다 (architecture §9)
+- 조치:
+  - 기기 쪽 문제면 사용자에게 수조, 히터, 센서를 확인하도록 안내한다
+  - 오탐이면 `anomaly.*` 설정을 조정한다. 판정을 끄려면 `anomaly.enabled=false`
+
 ## Suggested Thresholds (Initial)
 - parse failure ratio: `> 0.01` (1%)
 - timeout ratio: `> 0.05` (5%)

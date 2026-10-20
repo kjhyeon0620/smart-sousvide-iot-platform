@@ -2,6 +2,11 @@ package com.iot.IoT.controller;
 
 import com.iot.IoT.control.ControlAction;
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.anomaly.AnomalyType;
+import com.iot.IoT.dto.DeviceAnomalyPageResponse;
+import com.iot.IoT.dto.DeviceAnomalyResponse;
+import com.iot.IoT.dto.OpenAnomalyResponse;
+import com.iot.IoT.entity.AnomalyStatus;
 import com.iot.IoT.dto.DeviceCommandPageResponse;
 import com.iot.IoT.dto.DeviceCommandResponse;
 import com.iot.IoT.dto.DeviceControlPolicyResponse;
@@ -161,7 +166,8 @@ class DeviceControllerTest {
                 java.math.BigDecimal.valueOf(60.1),
                 java.math.BigDecimal.valueOf(65.0),
                 DeviceState.HEATING,
-                Instant.parse("2026-03-02T00:00:00Z")
+                Instant.parse("2026-03-02T00:00:00Z"),
+                List.of(new OpenAnomalyResponse(AnomalyType.TARGET_DEVIATION, Instant.parse("2026-03-02T00:00:00Z")))
         );
         when(deviceService.getStatus(1L)).thenReturn(response);
 
@@ -169,7 +175,39 @@ class DeviceControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.deviceId").value("SV-001"))
                 .andExpect(jsonPath("$.online").value(true))
-                .andExpect(jsonPath("$.latestState").value("HEATING"));
+                .andExpect(jsonPath("$.latestState").value("HEATING"))
+                .andExpect(jsonPath("$.openAnomalies[0].type").value("TARGET_DEVIATION"));
+    }
+
+    @Test
+    @DisplayName("GET /devices/{id}/anomalies should pass status and limit")
+    void getAnomalies_success() throws Exception {
+        DeviceAnomalyPageResponse response = new DeviceAnomalyPageResponse(1L, "SV-001", 5, List.of(
+                new DeviceAnomalyResponse(7L, AnomalyType.SENSOR_STUCK, AnomalyStatus.OPEN,
+                        Instant.parse("2026-10-20T00:00:00Z"), null, "temp=60.0, targetTemp=60.0, state=HOLDING")
+        ));
+        when(deviceService.getAnomalies(1L, "OPEN", 5)).thenReturn(response);
+
+        mockMvc.perform(get("/devices/1/anomalies").param("status", "OPEN").param("limit", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.limit").value(5))
+                .andExpect(jsonPath("$.items[0].type").value("SENSOR_STUCK"))
+                .andExpect(jsonPath("$.items[0].status").value("OPEN"));
+    }
+
+    @Test
+    @DisplayName("GET /devices/{id}/anomalies should map invalid params and missing device")
+    void getAnomalies_errors() throws Exception {
+        when(deviceService.getAnomalies(1L, "CLOSED", 0))
+                .thenThrow(new InvalidDeviceQueryException("status must be OPEN or RESOLVED"));
+        when(deviceService.getAnomalies(99L, null, 0)).thenThrow(new DeviceNotFoundException(99L));
+
+        mockMvc.perform(get("/devices/1/anomalies").param("status", "CLOSED"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        mockMvc.perform(get("/devices/99/anomalies"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("DEVICE_NOT_FOUND"));
     }
 
     @Test

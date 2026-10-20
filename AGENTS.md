@@ -69,7 +69,7 @@
 |---|---|
 | 로컬 인프라 | `docker compose up -d` |
 | 백엔드 실행 | `./gradlew bootRun` |
-| CI와 같은 테스트 게이트 | `./gradlew test --tests "com.iot.IoT.ingestion.*" --tests "com.iot.IoT.control.*" --tests "com.iot.IoT.watchdog.*" --tests "com.iot.IoT.loadtest.*"` |
+| CI와 같은 테스트 게이트 | `./gradlew test --tests "com.iot.IoT.ingestion.*" --tests "com.iot.IoT.control.*" --tests "com.iot.IoT.watchdog.*" --tests "com.iot.IoT.anomaly.*" --tests "com.iot.IoT.loadtest.*"` |
 | 전체 테스트 (인프라 필요) | `./gradlew test` |
 | 단일 테스트 | `./gradlew test --tests '<FQCN>'` |
 | 프론트 빌드 | `cd frontend && npm ci && npm run build` |

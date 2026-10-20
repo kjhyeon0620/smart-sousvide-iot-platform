@@ -1,5 +1,6 @@
 package com.iot.IoT.ingestion.service;
 
+import com.iot.IoT.anomaly.DeviceAnomalyService;
 import com.iot.IoT.control.ControlDecisionEngine;
 import com.iot.IoT.ingestion.dto.DeviceState;
 import com.iot.IoT.ingestion.dto.DeviceStatusMessage;
@@ -33,6 +34,7 @@ class DeviceIngestionServiceImplTest {
     private ControlDecisionEngine controlDecisionEngine;
     private IngestionMetricsCollector ingestionMetricsCollector;
     private DeviceService deviceService;
+    private DeviceAnomalyService deviceAnomalyService;
     private DeviceIngestionServiceImpl service;
 
     @BeforeEach
@@ -42,6 +44,7 @@ class DeviceIngestionServiceImplTest {
         controlDecisionEngine = Mockito.mock(ControlDecisionEngine.class);
         ingestionMetricsCollector = Mockito.mock(IngestionMetricsCollector.class);
         deviceService = Mockito.mock(DeviceService.class);
+        deviceAnomalyService = Mockito.mock(DeviceAnomalyService.class);
         service = createService(INFLUX_MODE_STRICT);
         when(controlDecisionEngine.decide(any())).thenReturn(ControlAction.HEAT_ON);
     }
@@ -165,6 +168,34 @@ class DeviceIngestionServiceImplTest {
         verify(ingestionMetricsCollector, times(1)).recordControlReplayCandidate();
     }
 
+    @Test
+    @DisplayName("Should keep storage and control results when anomaly evaluation throws")
+    void ingest_anomalyFails_otherStepsUnaffected() {
+        DeviceStatusMessage message = sampleMessage();
+        doThrow(new RuntimeException("anomaly bug")).when(deviceAnomalyService).evaluate(eq(message), any());
+
+        service.ingest(message);
+
+        verify(temperatureTimeSeriesPort, times(1)).save(eq(message), any());
+        verify(heartbeatPort, times(1)).updateLastSeen(eq("SV-001"), any());
+        verify(ingestionMetricsCollector, times(1)).recordOverallPipelineSuccess();
+        verify(deviceService, times(1)).sendAutoControlCommand(eq("SV-001"), any(), any());
+        verify(deviceAnomalyService, times(1)).evaluate(eq(message), any());
+    }
+
+    @Test
+    @DisplayName("Should evaluate anomalies even when storage and control fail")
+    void ingest_storageAndControlFail_anomalyStillEvaluated() {
+        DeviceStatusMessage message = sampleMessage();
+        doThrow(new RuntimeException("influx down")).when(temperatureTimeSeriesPort).save(eq(message), any());
+        doThrow(new RuntimeException("redis down")).when(heartbeatPort).updateLastSeen(any(), any());
+        doThrow(new RuntimeException("mysql down")).when(deviceService).sendAutoControlCommand(any(), any(), any());
+
+        service.ingest(message);
+
+        verify(deviceAnomalyService, times(1)).evaluate(eq(message), any());
+    }
+
     private DeviceStatusMessage sampleMessage() {
         return new DeviceStatusMessage(
                 "SV-001",
@@ -181,6 +212,7 @@ class DeviceIngestionServiceImplTest {
                 controlDecisionEngine,
                 ingestionMetricsCollector,
                 deviceService,
+                deviceAnomalyService,
                 influxWriteMode
         );
     }

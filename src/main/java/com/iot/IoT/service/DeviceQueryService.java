@@ -1,6 +1,8 @@
 package com.iot.IoT.service;
 
 import com.iot.IoT.dto.CreateDeviceRequest;
+import com.iot.IoT.dto.DeviceAnomalyPageResponse;
+import com.iot.IoT.dto.DeviceAnomalyResponse;
 import com.iot.IoT.dto.DeviceCommandPageResponse;
 import com.iot.IoT.dto.DeviceCommandResponse;
 import com.iot.IoT.dto.DevicePageResponse;
@@ -8,9 +10,13 @@ import com.iot.IoT.dto.DeviceResponse;
 import com.iot.IoT.dto.DeviceStatusResponse;
 import com.iot.IoT.dto.DeviceTemperaturePointResponse;
 import com.iot.IoT.dto.DeviceTemperatureSeriesResponse;
+import com.iot.IoT.dto.OpenAnomalyResponse;
+import com.iot.IoT.entity.AnomalyStatus;
 import com.iot.IoT.entity.Device;
+import com.iot.IoT.entity.DeviceAnomaly;
 import com.iot.IoT.entity.DeviceCommand;
 import com.iot.IoT.ingestion.port.TemperatureTimeSeriesQueryPort;
+import com.iot.IoT.repository.DeviceAnomalyRepository;
 import com.iot.IoT.repository.DeviceCommandRepository;
 import com.iot.IoT.repository.DeviceRepository;
 import com.iot.IoT.service.exception.DeviceNotFoundException;
@@ -27,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Service
@@ -40,10 +47,14 @@ public class DeviceQueryService {
     private static final int DEFAULT_COMMAND_LIMIT = 20;
     private static final int MIN_COMMAND_LIMIT = 1;
     private static final int MAX_COMMAND_LIMIT = 100;
+    private static final int DEFAULT_ANOMALY_LIMIT = 20;
+    private static final int MIN_ANOMALY_LIMIT = 1;
+    private static final int MAX_ANOMALY_LIMIT = 100;
     private static final Duration DEFAULT_RANGE = Duration.ofHours(1);
 
     private final DeviceRepository deviceRepository;
     private final DeviceCommandRepository deviceCommandRepository;
+    private final DeviceAnomalyRepository deviceAnomalyRepository;
     private final WatchdogStatePort watchdogStatePort;
     private final TemperatureTimeSeriesQueryPort temperatureTimeSeriesQueryPort;
     private final Duration heartbeatTtl;
@@ -51,12 +62,14 @@ public class DeviceQueryService {
     public DeviceQueryService(
             DeviceRepository deviceRepository,
             DeviceCommandRepository deviceCommandRepository,
+            DeviceAnomalyRepository deviceAnomalyRepository,
             WatchdogStatePort watchdogStatePort,
             TemperatureTimeSeriesQueryPort temperatureTimeSeriesQueryPort,
             @Value("${ingestion.heartbeat-ttl-seconds:120}") long heartbeatTtlSeconds
     ) {
         this.deviceRepository = deviceRepository;
         this.deviceCommandRepository = deviceCommandRepository;
+        this.deviceAnomalyRepository = deviceAnomalyRepository;
         this.watchdogStatePort = watchdogStatePort;
         this.temperatureTimeSeriesQueryPort = temperatureTimeSeriesQueryPort;
         this.heartbeatTtl = Duration.ofSeconds(heartbeatTtlSeconds);
@@ -124,7 +137,11 @@ public class DeviceQueryService {
                 latest.map(DeviceTemperaturePointResponse::temp).orElse(null),
                 latest.map(DeviceTemperaturePointResponse::targetTemp).orElse(null),
                 latest.map(DeviceTemperaturePointResponse::state).orElse(null),
-                latest.map(DeviceTemperaturePointResponse::occurredAt).orElse(null)
+                latest.map(DeviceTemperaturePointResponse::occurredAt).orElse(null),
+                deviceAnomalyRepository.findByDevicePkAndStatusOrderByDetectedAtAsc(device.getId(), AnomalyStatus.OPEN)
+                        .stream()
+                        .map(anomaly -> new OpenAnomalyResponse(anomaly.getType(), anomaly.getDetectedAt()))
+                        .toList()
         );
     }
 
@@ -161,6 +178,28 @@ public class DeviceQueryService {
                 .map(this::toCommandResponse)
                 .toList();
         return new DeviceCommandPageResponse(device.getId(), device.getDeviceId(), normalizedLimit, items);
+    }
+
+    @Transactional(readOnly = true)
+    public DeviceAnomalyPageResponse getAnomalies(Long id, String status, int limit) {
+        Device device = findEntity(id);
+        AnomalyStatus normalizedStatus = parseAnomalyStatus(status);
+        int normalizedLimit = normalizeLimit(limit, DEFAULT_ANOMALY_LIMIT, MIN_ANOMALY_LIMIT, MAX_ANOMALY_LIMIT);
+        PageRequest page = PageRequest.of(0, normalizedLimit);
+        List<DeviceAnomaly> anomalies = normalizedStatus == null
+                ? deviceAnomalyRepository.findByDevicePkOrderByDetectedAtDesc(device.getId(), page)
+                : deviceAnomalyRepository.findByDevicePkAndStatusOrderByDetectedAtDesc(device.getId(), normalizedStatus, page);
+        List<DeviceAnomalyResponse> items = anomalies.stream()
+                .map(anomaly -> new DeviceAnomalyResponse(
+                        anomaly.getId(),
+                        anomaly.getType(),
+                        anomaly.getStatus(),
+                        anomaly.getDetectedAt(),
+                        anomaly.getResolvedAt(),
+                        anomaly.getDetail()
+                ))
+                .toList();
+        return new DeviceAnomalyPageResponse(device.getId(), device.getDeviceId(), normalizedLimit, items);
     }
 
     private Device findEntity(Long id) {
@@ -215,15 +254,28 @@ public class DeviceQueryService {
     }
 
     private int normalizeCommandLimit(int limit) {
+        return normalizeLimit(limit, DEFAULT_COMMAND_LIMIT, MIN_COMMAND_LIMIT, MAX_COMMAND_LIMIT);
+    }
+
+    private static int normalizeLimit(int limit, int defaultLimit, int min, int max) {
         if (limit == 0) {
-            return DEFAULT_COMMAND_LIMIT;
+            return defaultLimit;
         }
-        if (limit < MIN_COMMAND_LIMIT || limit > MAX_COMMAND_LIMIT) {
-            throw new InvalidDeviceQueryException(
-                    "limit must be between %d and %d".formatted(MIN_COMMAND_LIMIT, MAX_COMMAND_LIMIT)
-            );
+        if (limit < min || limit > max) {
+            throw new InvalidDeviceQueryException("limit must be between %d and %d".formatted(min, max));
         }
         return limit;
+    }
+
+    private static AnomalyStatus parseAnomalyStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return AnomalyStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new InvalidDeviceQueryException("status must be OPEN or RESOLVED");
+        }
     }
 
     private Range resolveRange(Instant from, Instant to) {

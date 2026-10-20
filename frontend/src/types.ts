@@ -1,6 +1,8 @@
 export type DeviceState = 'IDLE' | 'HEATING' | 'HOLDING' | 'COOLING' | 'ERROR' | string;
 export type CommandType = 'HEAT_ON' | 'HEAT_OFF' | 'HOLD';
 export type CommandStatus = 'PENDING' | 'SENT' | 'ACKED' | 'EXPIRED' | 'FAILED' | string;
+export type AnomalyType = 'TARGET_DEVIATION' | 'HEATING_STALL' | 'SENSOR_STUCK' | string;
+export type AnomalyStatus = 'OPEN' | 'RESOLVED' | string;
 
 export interface Device {
   id: number;
@@ -26,6 +28,28 @@ export interface DeviceStatus extends Device {
   latestTargetTemp: number | null;
   latestState: DeviceState | null;
   latestOccurredAt: string | null;
+  openAnomalies?: OpenAnomaly[];
+}
+
+export interface OpenAnomaly {
+  type: AnomalyType;
+  detectedAt: string;
+}
+
+export interface DeviceAnomaly {
+  id: number;
+  type: AnomalyType;
+  status: AnomalyStatus;
+  detectedAt: string;
+  resolvedAt: string | null;
+  detail: string | null;
+}
+
+export interface AnomalyPage {
+  devicePk: number;
+  deviceId: string;
+  limit: number;
+  items: DeviceAnomaly[];
 }
 
 export interface TemperaturePoint {

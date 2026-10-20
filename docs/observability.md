@@ -51,6 +51,11 @@ curl -s http://localhost:8080/actuator/prometheus | rg "^iot\\."
   - `iot_downlink_command_expired_total`
   - `iot_downlink_command_retried_total`
   - `iot_downlink_command_idempotency_hit_total`
+- Anomaly ([spec 0075](specs/0075-rule-based-anomaly-detection/spec.md)):
+  - `iot_anomaly_opened_total{type}`: 이상이 열린 횟수. `type`은 `TARGET_DEVIATION`, `HEATING_STALL`, `SENSOR_STUCK`
+  - `iot_anomaly_resolved_total{type}`: 이상이 해소된 횟수
+  - `iot_anomaly_evaluation_failures_total`: 판정·저장 실패. 0이 아니면 MySQL 상태와 `[ANOMALY]` error 로그를 본다
+  - 진행 중 이상 수는 `opened - resolved`로 추정한다(재시작 전 OPEN은 포함되지 않는다). 정확한 값은 `GET /devices/{id}/anomalies?status=OPEN`
 
 ## Common Tags
 - `application`: `${spring.application.name}`

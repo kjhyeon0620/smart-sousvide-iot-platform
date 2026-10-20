@@ -1,4 +1,4 @@
-import type { CommandStatus, DeviceStatus } from './types';
+import type { AnomalyType, CommandStatus, DeviceStatus } from './types';
 
 export function displayName(device: { name: string | null; deviceId: string }) {
   return device.name?.trim() || device.deviceId;
@@ -53,6 +53,16 @@ export function stateLabel(status: DeviceStatus | null | undefined) {
     return 'Offline';
   }
   return status.latestState ?? 'Online';
+}
+
+const anomalyLabels: Record<string, string> = {
+  TARGET_DEVIATION: 'Off target',
+  HEATING_STALL: 'Heating stalled',
+  SENSOR_STUCK: 'Sensor stuck'
+};
+
+export function anomalyLabel(type: AnomalyType) {
+  return anomalyLabels[type] ?? type;
 }
 
 export function commandStatusTone(status: CommandStatus) {
