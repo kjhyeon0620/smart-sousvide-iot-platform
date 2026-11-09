@@ -335,7 +335,7 @@ SIM_TASK=mqttLoadTestHive RUN_ID="executor-strict-3000-clean-retry-$(date +%Y%m%
 - **수신 대비 핵심 처리율은 오히려 내려갔다** (`98.09%` → `80.66%`). 실패분은 거의 전부 중복 억제(`dupDrop`)였고, parse/Redis/Influx 실패는 `0`이다. 시뮬레이터 payload에 timestamp나 sequence가 없고 온도가 0.1 단위로 반올림되어, 같은 기기의 서로 다른 측정이 2초 창 안에서 동일 payload로 판정된다. 수신량이 늘수록 이 판정이 늘어난다. 이 지표를 개선 근거로 쓰지 않는다.
 
 ### Limitations
-- 1회씩 측정했다. 반복 측정 편차는 확인하지 않았다.
+- 1회씩 측정했다. 반복 측정 편차는 확인하지 않았다. → 2026-11-08 조건별 3회 반복 측정 결과는 [Phase 3 Repeat](#phase-3-repeat-measurement-78) 참고. 수정 전 장애는 3회 중 2회 재현됐고, 이 표의 `81.77%`·`56.41%`는 대표값이 아니었다.
 - broker 큐 설정을 조정하지 않았다. 고정 60초 테스트에서 큐를 키우면 지속적인 처리량 부족이 가려지기 때문이다.
 - 공유 구독을 쓰면 같은 기기의 메시지 처리 순서가 보장되지 않는다 (executor 모드에서도 이미 보장되지 않았다).
 - 남은 drop을 줄이려면 처리량 자체(메시지당 INFO 로그, Redis 동기 호출 등)를 개선하거나 브로커 측 흐름 제어를 검토해야 한다. 이번 범위 밖이다.
@@ -370,3 +370,48 @@ SIM_TASK=mqttLoadTestHive RUN_ID="executor-strict-3000-clean-retry-$(date +%Y%m%
 ### Limitations
 - 각 조건 2회씩이다. 지연 percentile은 Micrometer 클라이언트 측 추정값(감쇠 창)이다.
 - 이상 전이가 일어나는 부하(MySQL 쓰기 동반)는 측정하지 않았다. 전이는 기기당 드물게 일어난다는 전제다.
+
+
+## Phase 3 Repeat Measurement (#78)
+
+### Objective
+- #70 Phase 3는 조건별 1회 측정이었다. #75에서 같은 조건 수신율이 크게 흔들렸으므로, 단일값이 반복해도 유지되는지 확인한다.
+
+### Test Conditions
+- Host: #70과 같은 Mac, Mosquitto 2.0 (Docker), broker 설정 변경 없음
+- Simulator: `SIM_TASK=mqttLoadTestHive ./scripts/loadtest/run-distributed.sh 3000 4 120 1 60 1`
+- Backend: `java -jar`. 수정 전은 `8fc38fc`(#73 병합 직전 main), 수정 후는 `eebd22c`(#73 병합) 빌드. 이상 탐지(#75)는 두 빌드 모두 없다.
+  - B: 수정 전, executor + bypass, 구독자 1
+  - F: 수정 후, executor + bypass, `--spring.mqtt.subscriber-count=4`
+  - S: 수정 후, executor + strict, `--spring.mqtt.subscriber-count=4`
+- 매 실행 broker와 backend를 재시작했다. 순서는 B→F→S를 3바퀴 번갈아 돌렸다. 실패·재실행은 0회다.
+- recv는 시뮬레이터 종료 직후 값이다. 20초 뒤 값과의 차이는 S 3회차 284건, 나머지 0건이었다.
+- Redis는 다른 프로젝트가 6379를 쓰고 있어 별도 컨테이너(6380)로 띄우고 `--spring.data.redis.port=6380`을 넘겼다.
+- 판정 기준은 측정 전에 정했다: R1 B 3회 모두 15% 미만, R2 F 최솟값 > B 최댓값, R3 F 3회 모두 `81.77%` ± 10%p.
+
+### Results
+| Run | Code | Mode | Subscribers | Published | broker dropped | Backend recv | Receive rate | Core success | Executor 거부 예외 | Backend disconnect | Run ID |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| B1 | before | executor + bypass | 1 | `181500` | `71382` | `110118` | `60.67%` | `87.70%` | `0` | no | `rep-baseline-executor-bypass-3000-r1-20261108-173238` |
+| B2 | before | executor + bypass | 1 | `183000` | `4450` | `10381` | `5.67%` | `98.45%` | `1` | yes | `rep-baseline-executor-bypass-3000-r2-20261108-173934` |
+| B3 | before | executor + bypass | 1 | `182250` | `1239` | `11143` | `6.11%` | `97.81%` | `1` | yes | `rep-baseline-executor-bypass-3000-r3-20261108-174555` |
+| F1 | after | executor + bypass | 4 (shared) | `182250` | `0` | `182250` | `100.00%` | `85.58%` | - | no | `rep-fix-shared4-executor-bypass-3000-r1-20261108-173526` |
+| F2 | after | executor + bypass | 4 (shared) | `181500` | `0` | `181500` | `100.00%` | `85.72%` | - | no | `rep-fix-shared4-executor-bypass-3000-r2-20261108-174147` |
+| F3 | after | executor + bypass | 4 (shared) | `181500` | `0` | `181500` | `100.00%` | `85.80%` | - | no | `rep-fix-shared4-executor-bypass-3000-r3-20261108-174808` |
+| S1 | after | executor + strict | 4 (shared) | `182250` | `18978` | `163272` | `89.59%` | `83.12%` | - | no | `rep-fix-shared4-executor-strict-3000-r1-20261108-173729` |
+| S2 | after | executor + strict | 4 (shared) | `180750` | `20612` | `160138` | `88.60%` | `82.70%` | - | no | `rep-fix-shared4-executor-strict-3000-r2-20261108-174351` |
+| S3 | after | executor + strict | 4 (shared) | `180750` | `25448` | `155018` | `85.76%` | `83.61%` | - | no | `rep-fix-shared4-executor-strict-3000-r3-20261108-175015` |
+
+- 거부 예외와 disconnect는 backend 로그의 `mqtt ingestion executor saturated`, `Lost connection` 건수다. strict의 Influx 쓰기 실패는 3회 모두 `0`건이다.
+
+### Interpretation
+- R1 기각: 수정 전 장애는 3회 중 2회 재현됐다(`5.67%`, `6.11%`). 두 번 모두 #70과 같은 모양이다(수신 대비 처리율 98% 안팎, 발행 대비 수신율 6% 안팎). B1은 executor 큐가 포화되지 않아 거부 예외와 연결 유실이 없었다. 수정 전 결함은 큐가 넘칠 때 터지는 간헐 장애다.
+- R2 지지: F 최솟값 `100.00%`가 B 최댓값 `60.67%`보다 높다. 수정 후 6회 모두 연결 유실이 없었다.
+- R3 기각: F는 3회 모두 `100.00%`로 #70의 `81.77%`와 다르다. S도 `85.76~89.59%`로 #70의 `56.41%`보다 높다. #70 단일값은 대표값으로 쓰지 않는다.
+- 같은 호스트인데 수정 후 수신율이 #70보다 높은 이유는 확인하지 못했다. B1(포화 없음, 구독자 1)의 `60.67%`는 #70 수정 후 구독자 1 측정 `60.57%`와 비슷했다.
+- 수신 대비 핵심 처리율은 여전히 `83~86%`다. 실패분은 시뮬레이터 중복 payload의 중복 억제이며 #70 해석과 같다.
+
+### Limitations
+- 조건당 3회라 편차 추정은 거칠다. 수정 전 장애의 발생 확률은 말할 수 없다.
+- #70과의 수신율 차이는 호스트 상태(다른 프로세스 부하 등) 차이로 추정할 뿐이다.
+- 원시 로그(`backend.log`, `part-*.log`)는 `.gitignore`(`**/*.log`)에 따라 커밋하지 않았다. 요약 JSON만 남긴다.

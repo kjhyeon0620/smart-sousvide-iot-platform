@@ -1,0 +1,12 @@
+{
+  "run_id": "rep-fix-shared4-executor-strict-3000-r3-20261108-175015",
+  "attempt": "1",
+  "parts": 4,
+  "published_total": 180750,
+  "failed_total": 0,
+  "attempted_total": 180750,
+  "success_rate": 1.0000,
+  "success_rate_pct": 100.00,
+  "throughput_total_msg_per_sec": 3012.50,
+  "success_rate_formula": "published_total / (published_total + failed_total)"
+}
